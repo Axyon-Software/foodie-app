@@ -1,4 +1,4 @@
-// src/tests/e2e/home.spec.ts
+
 import { test, expect } from '@playwright/test';
 
 test.describe('Home Page', () => {

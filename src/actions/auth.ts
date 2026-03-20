@@ -71,6 +71,35 @@ export async function signInWithGoogle() {
 export async function signOut() {
     const supabase = await createClient()
     await supabase.auth.signOut()
-    // Don't redirect here — let the client handle it
     return { success: true }
+}
+
+export async function resetPassword(email: string) {
+    const supabase = await createClient()
+    const headersList = await headers()
+    const origin = headersList.get('origin') || 'http://localhost:3000'
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${origin}/reset-password`,
+    })
+
+    if (error) {
+        return { error: error.message }
+    }
+
+    return { success: true, message: 'Email de recuperação enviado!' }
+}
+
+export async function updatePassword(password: string) {
+    const supabase = await createClient()
+
+    const { error } = await supabase.auth.updateUser({
+        password,
+    })
+
+    if (error) {
+        return { error: error.message }
+    }
+
+    return { success: true, message: 'Senha atualizada com sucesso!' }
 }

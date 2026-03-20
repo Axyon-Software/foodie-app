@@ -139,13 +139,13 @@ export function SignInForm() {
 
                     {/* Forgot password */}
                     <div className="flex justify-end">
-                        <button
-                            type="button"
+                        <Link
+                            href="/forgot-password"
                             className="text-xs font-medium transition-colors hover:underline"
                             style={{ color: 'var(--color-primary)' }}
                         >
                             {AUTH_MESSAGES.FORGOT_PASSWORD}
-                        </button>
+                        </Link>
                     </div>
 
                     {/* Submit */}

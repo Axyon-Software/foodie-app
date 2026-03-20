@@ -16,6 +16,10 @@ export const AUTH_MESSAGES = {
     SIGN_IN_LINK: 'Faça login',
     SIGN_UP_LINK: 'Cadastre-se',
     FORGOT_PASSWORD: 'Esqueceu a senha?',
+    FORGOT_PASSWORD_TITLE: 'Esqueceu a senha?',
+    FORGOT_PASSWORD_SUBTITLE: 'Digite seu email e enviaremos um link para redefinir sua senha',
+    RESET_PASSWORD_TITLE: 'Nova senha',
+    RESET_PASSWORD_SUBTITLE: 'Digite sua nova senha abaixo',
 } as const;
 
 export const AUTH_ERRORS: Record<string, string> = {

@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import './globals.css';
 import { CartProvider } from '@/contexts/CartContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import { CartSidebarGlobal } from '@/components/cart/CartSidebarGlobal';
@@ -59,26 +60,28 @@ export default function RootLayout({
         <html lang="pt-BR" suppressHydrationWarning>
         <body className={inter.className}>
         <ThemeProvider>
-            <CartProvider>
-                <Header />
-                <main className="min-h-screen pb-20 lg:pb-0">
-                    {children}
-                </main>
-                <BottomNav />
-                <CartSidebarGlobal />
-                <Toaster
-                    position="top-center"
-                    richColors
-                    toastOptions={{
-                        style: {
-                            background: 'var(--color-bg-card)',
-                            border: '1px solid var(--color-border)',
-                            color: 'var(--color-text)',
-                        },
-                    }}
-                />
-                <ServiceWorkerRegister />
-            </CartProvider>
+            <AuthProvider>
+                <CartProvider>
+                    <Header />
+                    <main className="min-h-screen pb-20 lg:pb-0">
+                        {children}
+                    </main>
+                    <BottomNav />
+                    <CartSidebarGlobal />
+                    <Toaster
+                        position="top-center"
+                        richColors
+                        toastOptions={{
+                            style: {
+                                background: 'var(--color-bg-card)',
+                                border: '1px solid var(--color-border)',
+                                color: 'var(--color-text)',
+                            },
+                        }}
+                    />
+                    <ServiceWorkerRegister />
+                </CartProvider>
+            </AuthProvider>
         </ThemeProvider>
         </body>
         </html>

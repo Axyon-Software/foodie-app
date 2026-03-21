@@ -2,17 +2,31 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { signInWithGoogle } from '@/actions/auth'
-import { AUTH_MESSAGES } from '@/lib/constants/auth.constants'
+import { AUTH_MESSAGES, getAuthErrorMessage } from '@/lib/constants/auth.constants'
 
-export function GoogleButton() {
+interface GoogleButtonProps {
+    onError?: (error: string) => void
+}
+
+export function GoogleButton({ onError }: GoogleButtonProps) {
     const [isLoading, setIsLoading] = useState<boolean>(false)
 
     const handleGoogleSignIn = async (): Promise<void> => {
         setIsLoading(true)
         try {
-            await signInWithGoogle()
-        } catch {
+            const response = await signInWithGoogle()
+            if (response?.error) {
+                const errorMessage = getAuthErrorMessage(response.error)
+                toast.error(errorMessage)
+                onError?.(response.error)
+            }
+        } catch (error) {
+            const errorMessage = AUTH_MESSAGES.GOOGLE_ERROR
+            toast.error(errorMessage)
+            onError?.(errorMessage)
+        } finally {
             setIsLoading(false)
         }
     }

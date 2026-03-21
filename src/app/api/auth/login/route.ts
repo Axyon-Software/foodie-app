@@ -35,11 +35,19 @@ export async function POST(request: Request) {
             )
         }
 
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single()
+        // Try to get profile, but don't fail if table doesn't exist
+        let profile = null
+        try {
+            const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', data.user.id)
+                .single()
+            profile = profileData
+        } catch (profileError) {
+            console.warn('Profile fetch error:', profileError)
+            // Continue without profile
+        }
 
         return NextResponse.json({
             user: {
@@ -48,7 +56,7 @@ export async function POST(request: Request) {
                 emailConfirmed: data.user.email_confirmed_at !== null,
                 createdAt: data.user.created_at,
             },
-            profile: profile || null,
+            profile: profile,
             session: {
                 accessToken: data.session.access_token,
                 refreshToken: data.session.refresh_token,

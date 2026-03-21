@@ -3,24 +3,28 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
 
 export async function signInWithEmail(formData: {
     email: string;
     password: string;
 }) {
-    const supabase = await createClient()
+    try {
+        const supabase = await createClient()
 
-    const { error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-    })
+        const { error } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+        })
 
-    if (error) {
-        return { error: error.message }
+        if (error) {
+            return { error: error.message }
+        }
+
+        redirect('/')
+    } catch (error) {
+        console.error('Sign in error:', error)
+        return { error: 'Erro ao fazer login. Tente novamente.' }
     }
-
-    redirect('/')
 }
 
 export async function signUpWithEmail(formData: {
@@ -28,23 +32,28 @@ export async function signUpWithEmail(formData: {
     password: string;
     fullName: string;
 }) {
-    const supabase = await createClient()
+    try {
+        const supabase = await createClient()
 
-    const { error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-            data: {
-                full_name: formData.fullName,
+        const { error } = await supabase.auth.signUp({
+            email: formData.email,
+            password: formData.password,
+            options: {
+                data: {
+                    full_name: formData.fullName,
+                },
             },
-        },
-    })
+        })
 
-    if (error) {
-        return { error: error.message }
+        if (error) {
+            return { error: error.message }
+        }
+
+        return { success: true, message: 'Verifique seu email para confirmar o cadastro!' }
+    } catch (error) {
+        console.error('Sign up error:', error)
+        return { error: 'Erro ao criar conta. Tente novamente.' }
     }
-
-    return { success: true, message: 'Verifique seu email para confirmar o cadastro!' }
 }
 
 export async function signInWithGoogle() {

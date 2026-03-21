@@ -23,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
     "types": [
       "vitest/globals",
@@ -38,7 +40,8 @@
     "**/*.tsx",
     "src/**/*",
     ".next/types/**/*.ts",
-    "src/tests/vitest.d.ts"
+    "src/tests/vitest.d.ts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

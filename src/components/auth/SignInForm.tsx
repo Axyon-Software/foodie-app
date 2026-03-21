@@ -43,10 +43,19 @@ export function SignInForm() {
         setIsLoading(true)
         try {
             const response = await signInWithEmail({ email, password })
-            if (response?.error) {
-                setServerError(getAuthErrorMessage(response.error))
+            
+            // Se não houve resposta (redirect aconteceu), não fazer nada
+            if (!response) {
+                return
             }
-        } catch {
+            
+            if (response.error) {
+                const message = getAuthErrorMessage(response.error)
+                setServerError(message)
+                console.log('Login error:', response.error)
+            }
+        } catch (error) {
+            console.error('Login catch error:', error)
             setServerError('Ocorreu um erro inesperado. Tente novamente.')
         } finally {
             setIsLoading(false)

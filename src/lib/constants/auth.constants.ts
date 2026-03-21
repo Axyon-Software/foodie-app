@@ -16,6 +16,11 @@ export const AUTH_MESSAGES = {
     SIGN_IN_LINK: 'Faça login',
     SIGN_UP_LINK: 'Cadastre-se',
     FORGOT_PASSWORD: 'Esqueceu a senha?',
+    FORGOT_PASSWORD_TITLE: 'Esqueceu a senha?',
+    FORGOT_PASSWORD_SUBTITLE: 'Digite seu email e enviaremos um link para redefinir sua senha',
+    RESET_PASSWORD_TITLE: 'Nova senha',
+    RESET_PASSWORD_SUBTITLE: 'Digite sua nova senha abaixo',
+    GOOGLE_ERROR: 'Login com Google não disponível. Use email e senha.',
 } as const;
 
 export const AUTH_ERRORS: Record<string, string> = {
@@ -25,6 +30,11 @@ export const AUTH_ERRORS: Record<string, string> = {
     'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres',
     'Email rate limit exceeded': 'Muitas tentativas. Aguarde um momento',
     'Signup requires a valid password': 'Digite uma senha válida',
+    'Unsupported provider: provider is not enabled': 'Login com Google não disponível no momento',
+    'Failed to fetch': 'Erro de conexão. Verifique sua internet.',
+    'Network request failed': 'Erro de conexão. Tente novamente.',
+    'jwt': 'Sessão expirada. Faça login novamente.',
+    'session': 'Sessão expirada. Faça login novamente.',
 } as const;
 
 export const getAuthErrorMessage = (error: string): string => {

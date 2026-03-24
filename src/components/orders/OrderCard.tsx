@@ -103,7 +103,7 @@ export function OrderCard({ order, index }: OrderCardProps) {
                     {order.items.slice(0, 3).map((item, i) => (
                         <img
                             key={i}
-                            src={item.menuItemImage}
+                            src={item.menuItemImage || '/placeholder.png'}
                             alt={item.menuItemName}
                             className="h-10 w-10 rounded-full border-2 object-cover"
                             style={{ borderColor: 'var(--color-bg-card)' }}

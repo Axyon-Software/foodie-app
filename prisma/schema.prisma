@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum UserRole {
+  ADMIN
+  GERENCIADOR
+  EQUIPE
+  CLIENTE
+}
+
+enum RestaurantStatus {
+  OPEN
+  CLOSED
+  BUSY
+}
+
+// ============================================================================
+// AUTH & PROFILES
+// ============================================================================
+
+model Profile {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  full_name  String?
+  phone      String?
+  avatar_url String?
+  role       UserRole @default(CLIENTE)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+// ============================================================================
+// RESTAURANTS
+// ============================================================================
+
+model Restaurant {
+  id          String  @id @default(cuid())
+  user_id     String
+  name        String
+  slug        String  @unique
+  subdomain   String? @unique // Mantendo compatibilidade
+  description String?
+  logo        String?
+  cover_image String?
+  category    String?
+  cuisine     String?
+  phone       String?
+  email       String?
+
+  // Endereço
+  street       String?
+  number       String?
+  complement   String?
+  neighborhood String?
+  city         String?
+  state        String?
+  zip_code     String?
+  latitude     Float?
+  longitude    Float?
+
+  // Configurações de delivery
+  delivery_fee            Float?
+  minimum_order           Float?
+  estimated_delivery_time Int?
+  delivery_radius         Float?
+
+  // Status
+  status    RestaurantStatus @default(CLOSED)
+  is_active Boolean          @default(true)
+
+  // Horários
+  operating_hours Json?
+
+  // Informações bancárias
+  bank_info Json?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  categories Category[]
+  products   Product[]
+  orders     Order[]
+  tables     RestaurantTable[]
+
+  @@map("restaurants")
+}
+
+model RestaurantTable {
+  id            String   @id @default(uuid())
+  restaurant_id String
+  number        String
+  capacity      Int
+  status        String   @default("AVAILABLE") // AVAILABLE, OCCUPIED, RESERVED
+  qr_code       String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_tables")
+}
+
+// ============================================================================
+// MENU
+// ============================================================================
+
+model Category {
+  id            String   @id @default(cuid())
+  restaurant_id String
+  name          String
+  description   String?
+  icon          String?
+  image         String?
+  sort_order    Int      @default(0)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([restaurant_id])
+  @@map("categories")
+}
+
+model Product {
+  id            String  @id @default(cuid())
+  restaurant_id String
+  category_id   String
+  name          String
+  description   String?
+  price         Float
+  image         String?
+  is_available  Boolean @default(true)
+  is_active     Boolean @default(true)
+
+  // Features extras
+  badges           String[] @default([])
+  options          Json?
+  preparation_time Int?
+  calories         Int?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  category   Category   @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  @@index([restaurant_id])
+  @@index([category_id])
+  @@map("products")
+}
+
+// ============================================================================
+// ORDERS
+// ============================================================================
+
+model Order {
+  id               String      @id @default(uuid())
+  customer_id      String?
+  customer_name    String
+  customer_phone   String?
+  order_type       String      @default("DINE_IN")
+  table_number     String?
+  delivery_address String?
+  status           OrderStatus @default(PENDING)
+  items            Json
+  total            Float
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  restaurant_id    String
+
+  // Cancelamento
+  cancelled_at     DateTime?
+  cancel_reason    String?
+
+  // Prazos de preparo
+  estimated_preparation_time Int?       // em minutos
+  preparation_started_at     DateTime?
+  ready_at                   DateTime?
+  delivered_at               DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  reviews    Review[]
+
+  @@index([restaurant_id])
+  @@index([status])
+  @@index([created_at])
+  @@index([customer_id])
+  @@map("orders")
+}
+
+// ============================================================================
+// USER PREFERENCES & PRIVACY
+// ============================================================================
+
+model UserPrivacySettings {
+  id                  String   @id @default(uuid())
+  user_id             String   @unique
+  show_profile        Boolean  @default(true)
+  show_order_history  Boolean  @default(true)
+  allow_marketing     Boolean  @default(true)
+  allow_notifications Boolean  @default(true)
+  data_sharing        Boolean  @default(false)
+  two_factor_enabled  Boolean  @default(false)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@map("user_privacy_settings")
+}
+
+model UserPreferences {
+  id                         String   @id @default(uuid())
+  user_id                    String   @unique
+  dietary_restrictions       String[] @default([])
+  favorite_cuisines          String[] @default([])
+  notification_order_updates Boolean  @default(true)
+  notification_promotions    Boolean  @default(true)
+  notification_newsletter    Boolean  @default(true)
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model UserFavorite {
+  id            String   @id @default(uuid())
+  user_id       String
+  restaurant_id String
+  created_at    DateTime @default(now())
+
+  @@unique([user_id, restaurant_id])
+  @@map("user_favorites")
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  user_id      String
+  label        String
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  zip_code     String
+  is_default   Boolean  @default(false)
+  instructions String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("addresses")
+}
+
+model Review {
+  id            String    @id @default(uuid())
+  restaurant_id String
+  user_id       String
+  order_id      String?
+  rating        Int
+  comment       String?
+  response      String?
+  responded_at  DateTime?
+  created_at    DateTime  @default(now())
+
+  order Order? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@index([restaurant_id])
+  @@index([order_id])
+  @@index([user_id])
+  @@map("reviews")
+}

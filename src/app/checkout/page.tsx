@@ -11,9 +11,11 @@ import { formatPrice } from '@/lib/utils/format.utils';
 import {
     addressSchema,
     paymentSchema,
+    cardSchema,
     AddressFormData,
 } from '@/lib/validations/checkout.validations';
 import { PaymentMethod } from '@/types';
+import { CardDetails } from '@/types/payment.types';
 import { CHECKOUT_MESSAGES } from '@/lib/constants/checkout.constants';
 import { createOrder as createOrderAction, type OrderItemData } from '@/actions/orders';
 import { getAddresses, type AddressData } from '@/actions/addresses';
@@ -61,6 +63,7 @@ export default function CheckoutPage() {
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
     const [changeFor, setChangeFor] = useState<string>('');
     const [paymentError, setPaymentError] = useState<string>('');
+    const [cardDetails, setCardDetails] = useState<CardDetails | null>(null);
 
     // Loading state
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -179,6 +182,14 @@ export default function CheckoutPage() {
         if (!paymentResult.success) {
             setPaymentError('Selecione uma forma de pagamento');
             isValid = false;
+        }
+
+        if ((paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') && cardDetails) {
+            const cardResult = cardSchema.safeParse(cardDetails);
+            if (!cardResult.success) {
+                setPaymentError('Dados do cartão inválidos');
+                isValid = false;
+            }
         }
 
         return isValid;
@@ -398,6 +409,7 @@ export default function CheckoutPage() {
                     selectedMethod={paymentMethod}
                     changeFor={changeFor}
                     error={paymentError}
+                    totalAmount={Math.max(0, finalTotal)}
                     onMethodChange={handlePaymentMethodChange}
                     onChangeForChange={setChangeFor}
                 />

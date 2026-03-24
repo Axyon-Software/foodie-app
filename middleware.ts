@@ -19,13 +19,18 @@ async function getUserRole(
     supabase: ReturnType<typeof createServerClient>,
     userId: string
 ): Promise<UserRole | null> {
-    const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
+    try {
+        const { data } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single()
 
-    return data?.role || 'CLIENTE'
+        return data?.role || 'CLIENTE'
+    } catch {
+        // Table might not exist or other error
+        return 'CLIENTE'
+    }
 }
 
 export async function middleware(request: NextRequest) {

@@ -52,3 +52,23 @@ export const checkoutSchema = z.object({
 export type AddressFormData = z.infer<typeof addressSchema>;
 export type PaymentFormData = z.infer<typeof paymentSchema>;
 export type CheckoutFormData = z.infer<typeof checkoutSchema>;
+
+export const cardSchema = z.object({
+    number: z
+        .string()
+        .min(13, 'Número do cartão inválido')
+        .max(19, 'Número do cartão inválido'),
+    expiry: z
+        .string()
+        .regex(/^\d{2}\/\d{2}$/, 'Data de validade inválida'),
+    cvc: z
+        .string()
+        .min(3, 'CVV inválido')
+        .max(4, 'CVV inválido'),
+    name: z
+        .string()
+        .min(2, 'Nome do titular é obrigatório'),
+    saveCard: z.boolean().optional(),
+});
+
+export type CardFormData = z.infer<typeof cardSchema>;

@@ -1,25 +1,78 @@
 // src/components/checkout/PaymentForm.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { CreditCard } from 'lucide-react';
 import { PaymentMethod } from '@/types';
+import { CardDetails } from '@/types/payment.types';
 import { PAYMENT_OPTIONS, CHECKOUT_MESSAGES } from '@/lib/constants/checkout.constants';
+import CardForm from './CardForm';
+import PixQRCode from './PixQRCode';
+import { PixPaymentDetails } from '@/types/payment.types';
+import { createPixPayment } from '@/actions/payments';
 
 interface PaymentFormProps {
     selectedMethod: PaymentMethod | null;
     changeFor: string;
     error?: string;
+    totalAmount: number;
     onMethodChange: (method: PaymentMethod) => void;
     onChangeForChange: (value: string) => void;
 }
 
 export default function PaymentForm({
-                                        selectedMethod,
-                                        changeFor,
-                                        error,
-                                        onMethodChange,
-                                        onChangeForChange,
-                                    }: PaymentFormProps) {
+    selectedMethod,
+    changeFor,
+    error,
+    totalAmount,
+    onMethodChange,
+    onChangeForChange,
+}: PaymentFormProps) {
+    const [cardDetails, setCardDetails] = useState<CardDetails | null>(null);
+    const [cardError, setCardError] = useState<string>('');
+    const [pixDetails, setPixDetails] = useState<PixPaymentDetails | null>(null);
+    const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+    const [showCardForm, setShowCardForm] = useState(false);
+    const [showPixForm, setShowPixForm] = useState(false);
+
+    const isCardPayment = selectedMethod === 'CREDIT_CARD' || selectedMethod === 'DEBIT_CARD';
+    const isPixPayment = selectedMethod === 'PIX';
+    const isCashPayment = selectedMethod === 'CASH';
+
+    useEffect(() => {
+        if (selectedMethod === 'PIX' && !pixDetails && !isGeneratingPix) {
+            handleGeneratePix();
+        }
+    }, [selectedMethod]);
+
+    const handleGeneratePix = async () => {
+        setIsGeneratingPix(true);
+        const result = await createPixPayment(totalAmount, 'pending-order');
+        if (result.data) {
+            setPixDetails(result.data);
+        }
+        setIsGeneratingPix(false);
+    };
+
+    const handleMethodSelect = (method: PaymentMethod) => {
+        onMethodChange(method);
+        setShowCardForm(method === 'CREDIT_CARD' || method === 'DEBIT_CARD');
+        setShowPixForm(method === 'PIX');
+        
+        if (method === 'CASH') {
+            setShowCardForm(false);
+            setShowPixForm(false);
+        }
+        
+        if (method !== 'CREDIT_CARD' && method !== 'DEBIT_CARD') {
+            setCardDetails(null);
+            setCardError('');
+        }
+        if (method !== 'PIX') {
+            setPixDetails(null);
+        }
+    };
+
     return (
         <div
             className="rounded-2xl border overflow-hidden transition-colors"
@@ -70,7 +123,7 @@ export default function PaymentForm({
                                 name="paymentMethod"
                                 value={option.value}
                                 checked={isSelected}
-                                onChange={() => onMethodChange(option.value)}
+                                onChange={() => handleMethodSelect(option.value)}
                                 className="sr-only"
                             />
 
@@ -121,8 +174,31 @@ export default function PaymentForm({
                     </p>
                 )}
 
+                {/* Formulário de Cartão */}
+                {showCardForm && (
+                    <div className="mt-4">
+                        <CardForm
+                            cardDetails={cardDetails}
+                            onCardChange={setCardDetails}
+                            error={cardError}
+                        />
+                    </div>
+                )}
+
+                {/* QR Code Pix */}
+                {showPixForm && (
+                    <div className="mt-4">
+                        <PixQRCode
+                            pixDetails={pixDetails}
+                            amount={totalAmount}
+                            onGenerateNew={handleGeneratePix}
+                            isGenerating={isGeneratingPix}
+                        />
+                    </div>
+                )}
+
                 {/* Campo de troco (só aparece se for dinheiro) */}
-                {selectedMethod === 'CASH' && (
+                {isCashPayment && (
                     <div
                         className="mt-4 p-4 rounded-xl transition-colors"
                         style={{ backgroundColor: 'var(--color-bg-secondary)' }}

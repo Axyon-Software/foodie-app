@@ -84,15 +84,25 @@ function isValidOrderStatus(status: string): status is OrderStatus {
 }
 
 function parseOrderItems(items: unknown): OrderItemData[] {
-    if (Array.isArray(items)) return items as OrderItemData[]
-    if (typeof items === 'string') return JSON.parse(items)
+    if (Array.isArray(items)) {
+        return items as OrderItemData[]
+    }
+    if (typeof items === 'string') {
+        return JSON.parse(items)
+    }
     return []
 }
 
 function parseAddress(deliveryAddress: unknown): OrderData['address'] {
-    if (!deliveryAddress) return { street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+    if (!deliveryAddress) {
+        return { street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+    }
     if (typeof deliveryAddress === 'string') {
-        try { return JSON.parse(deliveryAddress) } catch { return { street: deliveryAddress, number: '', neighborhood: '', city: '', state: '', zipCode: '' } }
+        try {
+            return JSON.parse(deliveryAddress)
+        } catch {
+            return { street: deliveryAddress, number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+        }
     }
     return deliveryAddress as OrderData['address']
 }
@@ -104,7 +114,12 @@ function mapOrderToData(order: any, userId: string, restaurantName?: string): Or
     let review: ReviewData | null = null
     if (order.reviews && order.reviews.length > 0) {
         const r = order.reviews[0]
-        review = { id: r.id, rating: r.rating, comment: r.comment, createdAt: r.created_at?.toISOString?.() || '' }
+        review = {
+            id: r.id,
+            rating: r.rating,
+            comment: r.comment,
+            createdAt: r.created_at?.toISOString?.() || r.createdAt || '',
+        }
     }
 
     return {
@@ -119,20 +134,20 @@ function mapOrderToData(order: any, userId: string, restaurantName?: string): Or
         status: order.status,
         items,
         address,
-        paymentMethod: 'Dinheiro',
-        changeFor: null,
-        subtotal: order.total,
-        deliveryFee: 0,
-        discount: 0,
+        paymentMethod: order.payment_method || 'Dinheiro',
+        changeFor: order.change_for || null,
+        subtotal: order.subtotal ?? order.total,
+        deliveryFee: order.delivery_fee ?? 0,
+        discount: order.discount ?? 0,
         total: order.total,
-        couponCode: null,
-        estimatedDelivery: null,
-        estimatedPreparationTime: order.estimated_preparation_time,
+        couponCode: order.coupon_code || null,
+        estimatedDelivery: order.estimated_delivery || null,
+        estimatedPreparationTime: order.estimated_preparation_time || null,
         preparationStartedAt: order.preparation_started_at?.toISOString?.() || null,
         readyAt: order.ready_at?.toISOString?.() || null,
         deliveredAt: order.delivered_at?.toISOString?.() || null,
         cancelledAt: order.cancelled_at?.toISOString?.() || null,
-        cancelReason: order.cancel_reason,
+        cancelReason: order.cancel_reason || null,
         createdAt: order.created_at?.toISOString?.() || '',
         updatedAt: order.updated_at?.toISOString?.() || '',
         review,
@@ -154,7 +169,10 @@ export async function createOrder(orderData: {
 }): Promise<{ data?: OrderData; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     const estimatedMinutes = 40 + Math.floor(Math.random() * 20)
     const estimatedDelivery = new Date(Date.now() + estimatedMinutes * 60 * 1000).toISOString()
@@ -177,17 +195,33 @@ export async function createOrder(orderData: {
 
         return {
             data: {
-                id: order.id, userId: user.id, customerName: order.customer_name, customerPhone: null,
-                restaurantId: order.restaurant_id, restaurantName: orderData.restaurantName,
-                orderType: 'DELIVERY', tableNumber: null, status: order.status,
-                items: orderData.items, address: orderData.address,
-                paymentMethod: orderData.paymentMethod, changeFor: orderData.changeFor || null,
-                subtotal: orderData.subtotal, deliveryFee: orderData.deliveryFee,
-                discount: orderData.discount, total: order.total,
-                couponCode: orderData.couponCode || null, estimatedDelivery,
-                estimatedPreparationTime: estimatedMinutes, preparationStartedAt: null,
-                readyAt: null, deliveredAt: null, cancelledAt: null, cancelReason: null,
-                createdAt: order.created_at.toISOString(), updatedAt: order.updated_at.toISOString(),
+                id: order.id,
+                userId: user.id,
+                customerName: order.customer_name,
+                customerPhone: null,
+                restaurantId: order.restaurant_id,
+                restaurantName: orderData.restaurantName,
+                orderType: 'DELIVERY',
+                tableNumber: null,
+                status: order.status,
+                items: orderData.items,
+                address: orderData.address,
+                paymentMethod: orderData.paymentMethod,
+                changeFor: orderData.changeFor || null,
+                subtotal: orderData.subtotal,
+                deliveryFee: orderData.deliveryFee,
+                discount: orderData.discount,
+                total: order.total,
+                couponCode: orderData.couponCode || null,
+                estimatedDelivery,
+                estimatedPreparationTime: estimatedMinutes,
+                preparationStartedAt: null,
+                readyAt: null,
+                deliveredAt: null,
+                cancelledAt: null,
+                cancelReason: null,
+                createdAt: order.created_at.toISOString(),
+                updatedAt: order.updated_at.toISOString(),
             },
         }
     } catch (error) {
@@ -199,15 +233,33 @@ export async function createOrder(orderData: {
 export async function getOrders(): Promise<{ data?: OrderData[]; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     try {
         const orders = await prisma.order.findMany({
-            where: { customer_id: user.id },
-            include: { restaurant: { select: { name: true } }, reviews: { where: { user_id: user.id }, take: 1 } },
-            orderBy: { created_at: 'desc' },
+            where: {
+                customer_id: user.id,
+            },
+            include: {
+                restaurant: { select: { name: true } },
+                reviews: {
+                    where: { user_id: user.id },
+                    take: 1,
+                },
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
         })
-        return { data: orders.map(o => mapOrderToData(o, user.id, o.restaurant?.name)) }
+
+        const mappedOrders: OrderData[] = orders.map(order =>
+            mapOrderToData(order, user.id, order.restaurant?.name)
+        )
+
+        return { data: mappedOrders }
     } catch (error) {
         console.error('Erro ao buscar pedidos:', error)
         return { error: 'Erro ao carregar pedidos' }
@@ -217,14 +269,26 @@ export async function getOrders(): Promise<{ data?: OrderData[]; error?: string 
 export async function getOrderById(orderId: string): Promise<{ data?: OrderData; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     try {
         const order = await prisma.order.findUnique({
-            where: { id: orderId },
-            include: { restaurant: { select: { name: true } }, reviews: true },
+            where: {
+                id: orderId,
+            },
+            include: {
+                restaurant: { select: { name: true } },
+                reviews: true,
+            },
         })
-        if (!order) return { error: 'Pedido não encontrado' }
+
+        if (!order) {
+            return { error: 'Pedido não encontrado' }
+        }
+
         return { data: mapOrderToData(order, user.id, order.restaurant?.name) }
     } catch (error) {
         console.error('Erro ao buscar pedido:', error)
@@ -233,24 +297,58 @@ export async function getOrderById(orderId: string): Promise<{ data?: OrderData;
 }
 
 export async function updateOrderStatus({
-    orderId, newStatus, restaurantId,
-}: { orderId: string; newStatus: string; restaurantId: string }): Promise<{ success?: boolean; error?: string }> {
-    if (!isValidOrderStatus(newStatus)) return { error: 'Status inválido' }
+    orderId,
+    newStatus,
+    restaurantId,
+}: {
+    orderId: string
+    newStatus: string
+    restaurantId: string
+}): Promise<{ success?: boolean; error?: string }> {
+    if (!isValidOrderStatus(newStatus)) {
+        return { error: 'Status inválido' }
+    }
 
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
 
-    const restaurant = await prisma.restaurant.findFirst({ where: { id: restaurantId, user_id: user.id } })
-    if (!restaurant) return { error: 'Não autorizado ou restaurante não encontrado' }
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
+
+    const restaurant = await prisma.restaurant.findFirst({
+        where: {
+            id: restaurantId,
+            user_id: user.id,
+        },
+    })
+
+    if (!restaurant) {
+        return { error: 'Não autorizado ou restaurante não encontrado' }
+    }
 
     try {
-        const updateData: any = { status: newStatus, updated_at: new Date() }
-        if (newStatus === 'PREPARING') updateData.preparation_started_at = new Date()
-        else if (newStatus === 'READY') updateData.ready_at = new Date()
-        else if (newStatus === 'DELIVERED') updateData.delivered_at = new Date()
+        const updateData: any = {
+            status: newStatus,
+            updated_at: new Date(),
+        }
 
-        await prisma.order.update({ where: { id: orderId, restaurant_id: restaurantId }, data: updateData })
+        if (newStatus === 'PREPARING') {
+            updateData.preparation_started_at = new Date()
+        } else if (newStatus === 'READY') {
+            updateData.ready_at = new Date()
+        } else if (newStatus === 'DELIVERED') {
+            updateData.delivered_at = new Date()
+        }
+
+        await prisma.order.update({
+            where: {
+                id: orderId,
+                restaurant_id: restaurantId,
+            },
+            data: updateData,
+        })
+
         revalidatePath('/dashboard/orders')
         return { success: true }
     } catch (error) {
@@ -259,21 +357,47 @@ export async function updateOrderStatus({
     }
 }
 
-export async function cancelOrder({ orderId, reason }: { orderId: string; reason?: string }): Promise<{ success?: boolean; error?: string }> {
+export async function cancelOrder({
+    orderId,
+    reason,
+}: {
+    orderId: string
+    reason?: string
+}): Promise<{ success?: boolean; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     try {
-        const order = await prisma.order.findUnique({ where: { id: orderId } })
-        if (!order) return { error: 'Pedido não encontrado' }
-        if (order.customer_id !== user.id) return { error: 'Não autorizado' }
-        if (!['PENDING', 'CONFIRMED'].includes(order.status)) return { error: 'Não é possível cancelar este pedido. O preparo já foi iniciado.' }
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+        })
+
+        if (!order) {
+            return { error: 'Pedido não encontrado' }
+        }
+
+        if (order.customer_id !== user.id) {
+            return { error: 'Não autorizado' }
+        }
+
+        if (!['PENDING', 'CONFIRMED'].includes(order.status)) {
+            return { error: 'Não é possível cancelar este pedido. O preparo já foi iniciado.' }
+        }
 
         await prisma.order.update({
             where: { id: orderId },
-            data: { status: OrderStatus.CANCELLED, cancelled_at: new Date(), cancel_reason: reason || 'Cancelado pelo cliente', updated_at: new Date() },
+            data: {
+                status: OrderStatus.CANCELLED,
+                cancelled_at: new Date(),
+                cancel_reason: reason || 'Cancelado pelo cliente',
+                updated_at: new Date(),
+            },
         })
+
         revalidatePath('/orders')
         revalidatePath(`/order/${orderId}`)
         return { success: true }
@@ -284,20 +408,40 @@ export async function cancelOrder({ orderId, reason }: { orderId: string; reason
 }
 
 export async function cancelOrderByRestaurant({
-    orderId, restaurantId, reason,
-}: { orderId: string; restaurantId: string; reason?: string }): Promise<{ success?: boolean; error?: string }> {
+    orderId,
+    restaurantId,
+    reason,
+}: {
+    orderId: string
+    restaurantId: string
+    reason?: string
+}): Promise<{ success?: boolean; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
 
-    const restaurant = await prisma.restaurant.findFirst({ where: { id: restaurantId, user_id: user.id } })
-    if (!restaurant) return { error: 'Não autorizado' }
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
+
+    const restaurant = await prisma.restaurant.findFirst({
+        where: { id: restaurantId, user_id: user.id },
+    })
+
+    if (!restaurant) {
+        return { error: 'Não autorizado' }
+    }
 
     try {
         await prisma.order.update({
             where: { id: orderId, restaurant_id: restaurantId },
-            data: { status: OrderStatus.CANCELLED, cancelled_at: new Date(), cancel_reason: reason || 'Cancelado pelo restaurante', updated_at: new Date() },
+            data: {
+                status: OrderStatus.CANCELLED,
+                cancelled_at: new Date(),
+                cancel_reason: reason || 'Cancelado pelo restaurante',
+                updated_at: new Date(),
+            },
         })
+
         revalidatePath('/dashboard/orders')
         return { success: true }
     } catch (error) {
@@ -307,27 +451,62 @@ export async function cancelOrderByRestaurant({
 }
 
 export async function createOrderReview({
-    orderId, restaurantId, rating, comment,
-}: { orderId: string; restaurantId: string; rating: number; comment?: string }): Promise<{ success?: boolean; error?: string }> {
+    orderId,
+    restaurantId,
+    rating,
+    comment,
+}: {
+    orderId: string
+    restaurantId: string
+    rating: number
+    comment?: string
+}): Promise<{ success?: boolean; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
-    if (rating < 1 || rating > 5) return { error: 'Avaliação deve ser entre 1 e 5' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
+
+    if (rating < 1 || rating > 5) {
+        return { error: 'Avaliação deve ser entre 1 e 5' }
+    }
 
     try {
         const order = await prisma.order.findUnique({
             where: { id: orderId },
             include: { reviews: { where: { user_id: user.id } } },
         })
-        if (!order) return { error: 'Pedido não encontrado' }
-        if (order.customer_id !== user.id) return { error: 'Não autorizado' }
-        if (order.status !== 'DELIVERED') return { error: 'Só é possível avaliar pedidos entregues' }
+
+        if (!order) {
+            return { error: 'Pedido não encontrado' }
+        }
+
+        if (order.customer_id !== user.id) {
+            return { error: 'Não autorizado' }
+        }
+
+        if (order.status !== 'DELIVERED') {
+            return { error: 'Só é possível avaliar pedidos entregues' }
+        }
 
         if (order.reviews.length > 0) {
-            await prisma.review.update({ where: { id: order.reviews[0].id }, data: { rating, comment } })
+            await prisma.review.update({
+                where: { id: order.reviews[0].id },
+                data: { rating, comment },
+            })
         } else {
-            await prisma.review.create({ data: { order_id: orderId, restaurant_id: restaurantId, user_id: user.id, rating, comment } })
+            await prisma.review.create({
+                data: {
+                    order_id: orderId,
+                    restaurant_id: restaurantId,
+                    user_id: user.id,
+                    rating,
+                    comment,
+                },
+            })
         }
+
         revalidatePath('/orders')
         revalidatePath(`/order/${orderId}`)
         return { success: true }
@@ -337,38 +516,83 @@ export async function createOrderReview({
     }
 }
 
-export async function getOrdersForRestaurant({ filters }: { filters?: OrderFilters } = {}): Promise<{ data?: OrderData[]; error?: string }> {
+export async function getOrdersForRestaurant({
+    filters,
+}: {
+    filters?: OrderFilters
+} = {}): Promise<{ data?: OrderData[]; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     try {
-        const restaurant = await prisma.restaurant.findFirst({ where: { user_id: user.id }, select: { id: true, name: true } })
-        if (!restaurant) return { error: 'Restaurante não encontrado' }
+        const restaurant = await prisma.restaurant.findFirst({
+            where: { user_id: user.id },
+            select: { id: true, name: true },
+        })
+
+        if (!restaurant) {
+            return { error: 'Restaurante não encontrado' }
+        }
 
         const where: any = { restaurant_id: restaurant.id }
-        if (filters?.status && filters.status !== 'ALL') where.status = filters.status as OrderStatus
+
+        if (filters?.status && filters.status !== 'ALL') {
+            where.status = filters.status as OrderStatus
+        }
+
         if (filters?.dateFrom || filters?.dateTo) {
             where.created_at = {}
-            if (filters.dateFrom) where.created_at.gte = new Date(filters.dateFrom)
-            if (filters.dateTo) { const d = new Date(filters.dateTo); d.setHours(23, 59, 59, 999); where.created_at.lte = d }
+            if (filters.dateFrom) {
+                where.created_at.gte = new Date(filters.dateFrom)
+            }
+            if (filters.dateTo) {
+                const endDate = new Date(filters.dateTo)
+                endDate.setHours(23, 59, 59, 999)
+                where.created_at.lte = endDate
+            }
         }
+
         if (filters?.minValue !== undefined || filters?.maxValue !== undefined) {
             where.total = {}
-            if (filters.minValue !== undefined) where.total.gte = filters.minValue
-            if (filters.maxValue !== undefined) where.total.lte = filters.maxValue
+            if (filters.minValue !== undefined) {
+                where.total.gte = filters.minValue
+            }
+            if (filters.maxValue !== undefined) {
+                where.total.lte = filters.maxValue
+            }
         }
-        if (filters?.orderType && filters.orderType !== 'ALL') where.order_type = filters.orderType
 
-        const orders = await prisma.order.findMany({ where, include: { reviews: true }, orderBy: { created_at: 'desc' } })
-        let mapped = orders.map(o => mapOrderToData(o, user.id, restaurant.name))
+        if (filters?.orderType && filters.orderType !== 'ALL') {
+            where.order_type = filters.orderType
+        }
+
+        const orders = await prisma.order.findMany({
+            where,
+            include: {
+                reviews: true,
+            },
+            orderBy: { created_at: 'desc' },
+        })
+
+        let mappedOrders = orders.map(order =>
+            mapOrderToData(order, user.id, restaurant.name)
+        )
 
         if (filters?.search) {
-            const s = filters.search.toLowerCase()
-            mapped = mapped.filter(o => o.id.toLowerCase().includes(s) || o.customerName.toLowerCase().includes(s) || o.items.some(i => i.menuItemName.toLowerCase().includes(s)))
+            const searchTerm = filters.search.toLowerCase()
+            mappedOrders = mappedOrders.filter(
+                o =>
+                    o.id.toLowerCase().includes(searchTerm) ||
+                    o.customerName.toLowerCase().includes(searchTerm) ||
+                    o.items.some(i => i.menuItemName.toLowerCase().includes(searchTerm))
+            )
         }
 
-        return { data: mapped }
+        return { data: mappedOrders }
     } catch (error) {
         console.error('Erro ao buscar pedidos do restaurante:', error)
         return { error: 'Erro ao carregar pedidos' }
@@ -378,28 +602,78 @@ export async function getOrdersForRestaurant({ filters }: { filters?: OrderFilte
 export async function getOrderStats(): Promise<{ data?: OrderStats; error?: string }> {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Usuário não autenticado' }
+
+    if (authError || !user) {
+        return { error: 'Usuário não autenticado' }
+    }
 
     try {
-        const restaurant = await prisma.restaurant.findFirst({ where: { user_id: user.id }, select: { id: true } })
-        if (!restaurant) return { error: 'Restaurante não encontrado' }
+        const restaurant = await prisma.restaurant.findFirst({
+            where: { user_id: user.id },
+            select: { id: true },
+        })
 
-        const today = new Date(); today.setHours(0, 0, 0, 0)
+        if (!restaurant) {
+            return { error: 'Restaurante não encontrado' }
+        }
+
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
 
         const [todayOrders, pendingCount, preparingCount] = await Promise.all([
-            prisma.order.findMany({ where: { restaurant_id: restaurant.id, created_at: { gte: today } }, select: { total: true, status: true, ready_at: true, preparation_started_at: true } }),
-            prisma.order.count({ where: { restaurant_id: restaurant.id, status: OrderStatus.PENDING } }),
-            prisma.order.count({ where: { restaurant_id: restaurant.id, status: OrderStatus.PREPARING } }),
+            prisma.order.findMany({
+                where: {
+                    restaurant_id: restaurant.id,
+                    created_at: { gte: today },
+                },
+                select: {
+                    total: true,
+                    status: true,
+                    created_at: true,
+                    ready_at: true,
+                    preparation_started_at: true,
+                },
+            }),
+            prisma.order.count({
+                where: {
+                    restaurant_id: restaurant.id,
+                    status: OrderStatus.PENDING,
+                },
+            }),
+            prisma.order.count({
+                where: {
+                    restaurant_id: restaurant.id,
+                    status: OrderStatus.PREPARING,
+                },
+            }),
         ])
 
-        const completed = todayOrders.filter(o => o.ready_at && o.preparation_started_at)
-        const avgPrep = completed.length > 0 ? completed.reduce((s, o) => s + (o.ready_at!.getTime() - o.preparation_started_at!.getTime()) / 60000, 0) / completed.length : 0
+        const totalToday = todayOrders.length
+        const revenueToday = todayOrders
+            .filter(o => o.status !== 'CANCELLED')
+            .reduce((sum, o) => sum + o.total, 0)
 
-        return { data: {
-            totalToday: todayOrders.length,
-            revenueToday: todayOrders.filter(o => o.status !== 'CANCELLED').reduce((s, o) => s + o.total, 0),
-            pendingCount, preparingCount, avgPreparationTime: Math.round(avgPrep),
-        }}
+        const completedOrders = todayOrders.filter(
+            o => o.ready_at && o.preparation_started_at
+        )
+        const avgPreparationTime =
+            completedOrders.length > 0
+                ? completedOrders.reduce((sum, o) => {
+                    const diff =
+                        (o.ready_at!.getTime() - o.preparation_started_at!.getTime()) / 60000
+                    return sum + diff
+                }, 0) / completedOrders.length
+                : 0
+
+        return {
+            data: {
+                totalToday,
+                revenueToday,
+                pendingCount,
+                preparingCount,
+                avgPreparationTime: Math.round(avgPreparationTime),
+            },
+        }
     } catch (error) {
         console.error('Erro ao buscar estatísticas:', error)
         return { error: 'Erro ao carregar estatísticas' }

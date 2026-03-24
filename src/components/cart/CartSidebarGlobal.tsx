@@ -128,7 +128,7 @@ export function CartSidebarGlobal() {
                                     >
                                         {/* Item Image */}
                                         <img
-                                            src={item.menuItem.image}
+                                            src={item.menuItem.image || '/placeholder.png'}
                                             alt={item.menuItem.name}
                                             className="h-16 w-16 rounded-lg object-cover"
                                         />

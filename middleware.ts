@@ -28,7 +28,6 @@ async function getUserRole(
 
         return data?.role || 'CLIENTE'
     } catch {
-        // Table might not exist or other error
         return 'CLIENTE'
     }
 }
@@ -47,7 +46,7 @@ export async function middleware(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
+                    cookiesToSet.forEach(({ name, value }) =>
                         request.cookies.set(name, value)
                     )
                     supabaseResponse = NextResponse.next({
@@ -61,28 +60,44 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    // IMPORTANT: DO NOT REMOVE auth.getUser()
-    // This refreshes the session if expired
     const {
         data: { user },
     } = await supabase.auth.getUser()
 
-    // Protected routes - redirect to sign-in if not authenticated
+    const { pathname } = request.nextUrl
+
+    // 1. Rotas do Dashboard/Admin - precisa estar autenticado
+    const isDashboardRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
+
+    if (isDashboardRoute && !user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/sign-in'
+        url.searchParams.set('redirectTo', pathname)
+        return NextResponse.redirect(url)
+    }
+
+    // 2. Rotas protegidas do cliente
     const protectedRoutes = ['/profile', '/orders', '/addresses', '/cart', '/favorites', '/checkout']
     const isProtectedRoute = protectedRoutes.some(route =>
-        request.nextUrl.pathname.startsWith(route)
+        pathname.startsWith(route)
     )
 
-    // Role-based routes
+    if (isProtectedRoute && !user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/sign-in'
+        url.searchParams.set('redirectTo', pathname)
+        return NextResponse.redirect(url)
+    }
+
+    // 3. Rotas baseadas em role
     const isRoleBasedRoute = routeConfigs.some(config =>
-        request.nextUrl.pathname.startsWith(config.path)
+        pathname.startsWith(config.path)
     )
 
-    // Handle role-based routes
     if (isRoleBasedRoute && user) {
         const userRole = await getUserRole(supabase, user.id)
         const matchedConfig = routeConfigs.find(config =>
-            request.nextUrl.pathname.startsWith(config.path)
+            pathname.startsWith(config.path)
         )
 
         if (matchedConfig && userRole && !matchedConfig.roles.includes(userRole)) {
@@ -92,18 +107,8 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    if (isProtectedRoute && !user) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/sign-in'
-        url.searchParams.set('redirectTo', request.nextUrl.pathname)
-        return NextResponse.redirect(url)
-    }
-
-    // Auth routes - redirect to home if already authenticated
-    const authRoutes = ['/sign-in', '/sign-up']
-    const isAuthRoute = authRoutes.some(route =>
-        request.nextUrl.pathname.startsWith(route)
-    )
+    // 4. Rotas de Auth - se já logado, vai para home
+    const isAuthRoute = pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up')
 
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone()
@@ -116,13 +121,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public files (icons, manifest, sw)
-         */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js)$).*)',
+        '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js|css)$).*)',
     ],
 }

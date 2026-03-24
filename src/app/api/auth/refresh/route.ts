@@ -10,7 +10,7 @@ const refreshSchema = z.object({
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        
+
         const result = refreshSchema.safeParse(body)
         if (!result.success) {
             return NextResponse.json(
@@ -26,9 +26,9 @@ export async function POST(request: Request) {
             refresh_token: refreshToken,
         })
 
-        if (error) {
+        if (error || !data.session) {
             return NextResponse.json(
-                { error: error.message },
+                { error: error?.message || 'Sessão inválida' },
                 { status: 401 }
             )
         }

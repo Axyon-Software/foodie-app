@@ -67,7 +67,7 @@ export default function OrderSummary() {
                         {/* Imagem */}
                         <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0">
                             <Image
-                                src={item.menuItem.image}
+                                src={item.menuItem.image || '/placeholder.png'}
                                 alt={item.menuItem.name}
                                 fill
                                 className="object-cover"

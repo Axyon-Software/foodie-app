@@ -207,7 +207,7 @@ export default function CheckoutPage() {
                 const orderItems: OrderItemData[] = items.map((item) => ({
                     menuItemId: item.menuItem.id,
                     menuItemName: item.menuItem.name,
-                    menuItemImage: item.menuItem.image,
+                    menuItemImage: item.menuItem.image || '/placeholder.png',
                     menuItemPrice: item.menuItem.price,
                     quantity: item.quantity,
                     observation: item.observation,

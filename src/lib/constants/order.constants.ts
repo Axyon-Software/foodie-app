@@ -11,6 +11,13 @@ export const ORDER_MESSAGES = {
     TRACK_ORDER: 'Acompanhar',
     REORDER: 'Pedir novamente',
     ITEMS_COUNT: (count: number) => `${count} ${count === 1 ? 'item' : 'itens'}`,
+    CANCEL_ORDER: 'Cancelar pedido',
+    CANCEL_CONFIRM: 'Tem certeza que deseja cancelar este pedido?',
+    CANCEL_SUCCESS: 'Pedido cancelado com sucesso',
+    CANCEL_ERROR: 'Erro ao cancelar pedido',
+    REVIEW_TITLE: 'Avaliar pedido',
+    REVIEW_SUCCESS: 'Avaliação enviada com sucesso',
+    SEARCH_PLACEHOLDER: 'Buscar por pedido, restaurante ou item...',
 } as const
 
 export const ORDER_STATUS_CONFIG: Record<string, {

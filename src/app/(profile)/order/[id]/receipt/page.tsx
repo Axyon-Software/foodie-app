@@ -10,7 +10,8 @@ import {
     Banknote, Smartphone
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getReceiptByOrder, formatReceiptForPrint, sendReceiptByEmail } from '@/actions/receipt-actions';
+import { getReceiptByOrder, sendReceiptByEmail } from '@/actions/receipt-actions';
+import { formatReceiptForPrint } from '@/lib/utils/receipt.utils';
 import { ReceiptData } from '@/types/payment.types';
 import { formatPrice } from '@/lib/utils/format.utils';
 

@@ -1,20 +1,19 @@
-// Arquivo: app/dashboard/menu/page.tsx
+// src/app/dashboard/menu/page.tsx
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { CategoryForm } from "./CategoryForm";
-import { CategoryItem } from "./CategoryItem"; // 👈 Importamos o novo componente
+import { CategoryItem } from "./CategoryItem";
 
 export default async function MenuPage() {
     const cookieStore = await cookies();
     const restaurantId = cookieStore.get("restaurantId")?.value;
 
-    // 👇 MUDANÇA AQUI: Adicionamos o 'include: { products: true }'
     const categories = await prisma.category.findMany({
-        where: { restaurantId: restaurantId || "" },
+        where: { restaurant_id: restaurantId || "" }, // ✅ SNAKE_CASE
         orderBy: { name: 'asc' },
         include: {
             products: {
-                orderBy: { name: 'asc' } // Traz os produtos em ordem alfabética também
+                orderBy: { name: 'asc' }
             }
         }
     });
@@ -41,7 +40,6 @@ export default async function MenuPage() {
                         </div>
                     ) : (
                         <ul className="divide-y divide-gray-100">
-                            {/* 👇 MUDANÇA AQUI: Usamos o novo componente para cada categoria */}
                             {categories.map((category) => (
                                 <CategoryItem key={category.id} category={category} />
                             ))}

@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Star, ChevronLeft, Send, ThumbsUp, MessageCircle, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getRestaurantReviews, respondToReview, getRestaurantProfile } from '@/actions/restaurant-actions';
+import { getRestaurantReviews, respondToReview, getRestaurantProfile } from '@/actions/restaurantActions';
 import { Review } from '@/types/restaurant-management.types';
 
 export default function ReviewsPage() {

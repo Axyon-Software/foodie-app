@@ -1,9 +1,11 @@
 // src/app/api/payments/mercadopago/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
+const FEATURE_ENABLED = process.env.ENABLE_MERCADOPAGO_PAYMENTS === 'true'; // ✅ FEATURE FLAG
+
 const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || '';
-const MERCADOPAGO_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://api.mercadopago.com' 
+const MERCADOPAGO_BASE_URL = process.env.NODE_ENV === 'production'
+    ? 'https://api.mercadopago.com'
     : 'https://api.mercadopago.com';
 
 interface PaymentRequest {
@@ -19,6 +21,17 @@ interface PaymentRequest {
 }
 
 export async function POST(request: NextRequest) {
+    // ✅ DESABILITADO NO MVP
+    if (!FEATURE_ENABLED) {
+        return NextResponse.json(
+            {
+                error: 'Mercado Pago payments are not enabled yet',
+                message: 'This feature will be available in v5.0. Use manual PIX for now.'
+            },
+            { status: 503 }
+        );
+    }
+
     try {
         const body: PaymentRequest = await request.json();
         const { amount, email, name, document, orderId, items, paymentMethod, cardToken, installments } = body;
@@ -60,7 +73,7 @@ export async function POST(request: NextRequest) {
         if ((paymentMethod === 'credit_card' || paymentMethod === 'debit_card') && cardToken) {
             paymentData.token = cardToken;
             paymentData.installments = installments || 1;
-            paymentDataissuer_id = undefined;
+            paymentData.issuer_id = undefined; // ✅ CORRIGIDO (era paymentDataissuer_id)
         }
 
         const response = await fetch(`${MERCADOPAGO_BASE_URL}/v1/payments`, {
@@ -76,7 +89,7 @@ export async function POST(request: NextRequest) {
 
         if (!response.ok) {
             return NextResponse.json(
-                { 
+                {
                     error: paymentResult.message || 'Payment failed',
                     details: paymentResult
                 },
@@ -122,6 +135,13 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+    if (!FEATURE_ENABLED) {
+        return NextResponse.json(
+            { error: 'Mercado Pago is not enabled' },
+            { status: 503 }
+        );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const paymentId = searchParams.get('id');
 

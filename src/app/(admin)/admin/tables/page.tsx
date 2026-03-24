@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Plus, Table, CheckCircle, XCircle, Clock, Trash2, ChevronLeft, Users, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getTables, createTable, updateTableStatus, deleteTable } from '@/actions/restaurant-actions';
+import { getTables, createTable, updateTableStatus, deleteTable } from '@/actions/restaurantActions';
 import { RestaurantTable } from '@/types/restaurant-management.types';
 
 const LOCATIONS = ['Salão Principal', 'Terraço', 'Varanda', 'Salão Privativo', 'Bar'];

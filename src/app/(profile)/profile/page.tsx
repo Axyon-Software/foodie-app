@@ -5,15 +5,15 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { 
-    User, Mail, Phone, Shield, Heart, MapPin, ShoppingBag, 
+import {
+    User, Mail, Phone, Shield, Heart, MapPin, ShoppingBag,
     Settings, LogOut, ChevronRight, Bell, Key, Eye, Check,
     Clock, Star, CreditCard
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDateBR } from '@/lib/utils/format.utils';
-import { getUserPrivacySettings, updateUserPrivacySettings, getFavoriteRestaurants, removeFavoriteRestaurant } from '@/actions/profile-actions';
+import { getUserProfile, getUserPrivacySettings, updateUserPrivacySettings, getFavoriteRestaurants } from '@/actions/profileActions';
 import { UserPrivacySettings } from '@/types/user-profile.types';
 
 interface ProfileMenuItem {
@@ -26,7 +26,8 @@ interface ProfileMenuItem {
 
 export default function ProfilePage() {
     const router = useRouter();
-    const { user, profile, signOut, hasRole } = useAuth();
+    const { user, signOut, hasRole } = useAuth();
+    const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [privacySettings, setPrivacySettings] = useState<UserPrivacySettings | null>(null);
     const [favoritesCount, setFavoritesCount] = useState(0);
@@ -38,11 +39,19 @@ export default function ProfilePage() {
                 return;
             }
 
+            // Carregar perfil
+            const profileResult = await getUserProfile();
+            if (profileResult.data) {
+                setProfile(profileResult.data);
+            }
+
+            // Carregar configurações de privacidade
             const privacyResult = await getUserPrivacySettings();
             if (privacyResult.data) {
                 setPrivacySettings(privacyResult.data);
             }
 
+            // Carregar favoritos
             const favoritesResult = await getFavoriteRestaurants();
             if (favoritesResult.data) {
                 setFavoritesCount(favoritesResult.data.length);
@@ -58,9 +67,9 @@ export default function ProfilePage() {
         if (!privacySettings) return;
 
         const newSettings = { ...privacySettings, [key]: !privacySettings[key] };
-        
+
         const result = await updateUserPrivacySettings({ [key]: !privacySettings[key] });
-        
+
         if (result.success) {
             setPrivacySettings(newSettings);
             toast.success('Configuração atualizada');
@@ -134,38 +143,38 @@ export default function ProfilePage() {
         );
     }
 
-    const menuItems = hasRole(['ADMIN', 'GERENCIADOR', 'ADMIN_RESTAURANTE']) 
-        ? [...adminMenuItems, ...clientMenuItems]
-        : clientMenuItems;
+    // Verificar se tem alguma das roles de admin
+    const isAdmin = hasRole('ADMIN') || hasRole('GERENCIADOR');
+    const menuItems = isAdmin ? [...adminMenuItems, ...clientMenuItems] : clientMenuItems;
 
     return (
         <div className="min-h-screen pb-20" style={{ backgroundColor: 'var(--color-bg)' }}>
             {/* Header */}
-            <div 
+            <div
                 className="p-6"
                 style={{ backgroundColor: 'var(--color-bg-card)' }}
             >
                 <div className="flex items-center gap-4">
-                    {profile?.avatarUrl ? (
-                        <img 
-                            src={profile.avatarUrl} 
-                            alt={profile.fullName || 'User'}
+                    {profile?.avatar_url ? (
+                        <img
+                            src={profile.avatar_url}
+                            alt={profile.full_name || 'User'}
                             className="w-16 h-16 rounded-full object-cover"
                         />
                     ) : (
                         <div className="w-16 h-16 rounded-full bg-[#00A082] flex items-center justify-center text-white text-xl font-bold">
-                            {profile?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                            {profile?.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
                         </div>
                     )}
                     <div className="flex-1">
                         <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>
-                            {profile?.fullName || 'Usuário'}
+                            {profile?.full_name || 'Usuário'}
                         </h1>
                         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                            {profile?.email}
+                            {user?.email}
                         </p>
                         {profile?.role && profile.role !== 'CLIENTE' && (
-                            <span 
+                            <span
                                 className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full"
                                 style={{ backgroundColor: 'var(--color-primary-light)', color: '#00A082' }}
                             >
@@ -186,7 +195,7 @@ export default function ProfilePage() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4 p-4">
                 <Link href="/orders">
-                    <motion.div 
+                    <motion.div
                         whileTap={{ scale: 0.98 }}
                         className="p-4 rounded-2xl text-center"
                         style={{ backgroundColor: 'var(--color-bg-card)' }}
@@ -197,7 +206,7 @@ export default function ProfilePage() {
                     </motion.div>
                 </Link>
                 <Link href="/favorites">
-                    <motion.div 
+                    <motion.div
                         whileTap={{ scale: 0.98 }}
                         className="p-4 rounded-2xl text-center"
                         style={{ backgroundColor: 'var(--color-bg-card)' }}
@@ -208,7 +217,7 @@ export default function ProfilePage() {
                     </motion.div>
                 </Link>
                 <Link href="/addresses">
-                    <motion.div 
+                    <motion.div
                         whileTap={{ scale: 0.98 }}
                         className="p-4 rounded-2xl text-center"
                         style={{ backgroundColor: 'var(--color-bg-card)' }}
@@ -230,11 +239,11 @@ export default function ProfilePage() {
                         transition={{ delay: index * 0.05 }}
                     >
                         <Link href={item.href}>
-                            <div 
+                            <div
                                 className="flex items-center gap-4 p-4 rounded-2xl transition-colors"
                                 style={{ backgroundColor: 'var(--color-bg-card)' }}
                             >
-                                <div 
+                                <div
                                     className="w-10 h-10 rounded-full flex items-center justify-center"
                                     style={{ backgroundColor: 'var(--color-primary-light)', color: '#00A082' }}
                                 >
@@ -244,7 +253,7 @@ export default function ProfilePage() {
                                     {item.label}
                                 </span>
                                 {item.badge && (
-                                    <span 
+                                    <span
                                         className="px-2 py-0.5 text-xs rounded-full"
                                         style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
                                     >
@@ -274,10 +283,10 @@ export default function ProfilePage() {
                                 <Bell size={20} style={{ color: 'var(--color-text-secondary)' }} />
                                 <span style={{ color: 'var(--color-text)' }}>Notificações</span>
                             </div>
-                            <div 
+                            <div
                                 className={`w-12 h-6 rounded-full p-1 transition-colors ${privacySettings.allowNotifications ? 'bg-[#00A082]' : 'bg-gray-300'}`}
                             >
-                                <div 
+                                <div
                                     className={`w-4 h-4 rounded-full bg-white transition-transform ${privacySettings.allowNotifications ? 'translate-x-6' : ''}`}
                                 />
                             </div>
@@ -291,10 +300,10 @@ export default function ProfilePage() {
                                 <Key size={20} style={{ color: 'var(--color-text-secondary)' }} />
                                 <span style={{ color: 'var(--color-text)' }}>Autenticação em 2 fatores</span>
                             </div>
-                            <div 
+                            <div
                                 className={`w-12 h-6 rounded-full p-1 transition-colors ${privacySettings.twoFactorEnabled ? 'bg-[#00A082]' : 'bg-gray-300'}`}
                             >
-                                <div 
+                                <div
                                     className={`w-4 h-4 rounded-full bg-white transition-transform ${privacySettings.twoFactorEnabled ? 'translate-x-6' : ''}`}
                                 />
                             </div>
@@ -308,10 +317,10 @@ export default function ProfilePage() {
                                 <Eye size={20} style={{ color: 'var(--color-text-secondary)' }} />
                                 <span style={{ color: 'var(--color-text)' }}>Compartilhamento de dados</span>
                             </div>
-                            <div 
+                            <div
                                 className={`w-12 h-6 rounded-full p-1 transition-colors ${privacySettings.dataSharing ? 'bg-[#00A082]' : 'bg-gray-300'}`}
                             >
-                                <div 
+                                <div
                                     className={`w-4 h-4 rounded-full bg-white transition-transform ${privacySettings.dataSharing ? 'translate-x-6' : ''}`}
                                 />
                             </div>
@@ -322,14 +331,14 @@ export default function ProfilePage() {
 
             {/* Account Info */}
             <div className="p-4">
-                <div 
+                <div
                     className="p-4 rounded-2xl"
                     style={{ backgroundColor: 'var(--color-bg-card)' }}
                 >
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Membro desde</span>
                         <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                            {profile?.createdAt ? formatDateBR(profile.createdAt) : '-'}
+                            {profile?.created_at ? formatDateBR(profile.created_at) : '-'}
                         </span>
                     </div>
                 </div>

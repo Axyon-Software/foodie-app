@@ -1,24 +1,23 @@
 // src/app/api/payments/pix/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-    apiVersion: '2025-04-30.basil',
-});
-
+const FEATURE_ENABLED = process.env.ENABLE_PIX_AUTO === 'true';
 const PIX_KEY = process.env.PIX_KEY || 'foodie@email.com';
 const PIX_KEY_TYPE = process.env.PIX_KEY_TYPE || 'email';
 
+// ✅ NÃO INICIALIZAR STRIPE NO TOPO DO ARQUIVO
+// Só importar quando realmente necessário
+
 interface PixPayload {
     key: string;
-        keyType: string;
+    keyType: string;
     amount: number;
     description?: string;
 }
 
 function generatePixCode(payload: PixPayload): string {
     const { key, keyType, amount, description } = payload;
-    
+
     const formatValue = (id: string, value: string | number): string => {
         const valueStr = String(value);
         const len = valueStr.length;
@@ -28,15 +27,15 @@ function generatePixCode(payload: PixPayload): string {
 
     const now = new Date();
     const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
-    
+
     const merchantAccount = formatValue('00', '01') + formatValue('11', PIX_KEY_TYPE === 'email' ? '02' : '01') + formatValue('12', PIX_KEY);
     const merchantCategory = formatValue('26', '0000');
     const currency = formatValue('44', '986');
     const amountField = formatValue('54', amount.toFixed(2));
     const countryCode = formatValue('58', 'BR');
     const txId = formatValue('62', '***') + formatValue('05', timestamp);
-    
-    const descriptionField = description 
+
+    const descriptionField = description
         ? formatValue('69', description.substring(0, 99))
         : formatValue('69', 'Foodie App Pedido');
 
@@ -45,7 +44,7 @@ function generatePixCode(payload: PixPayload): string {
     const merchantName = formatValue('59', 'Foodie App');
     const merchantCity = formatValue('60', 'SAO PAULO');
 
-    const payloadString = 
+    const payloadString =
         gui +
         payloadFormat +
         merchantAccount +
@@ -73,6 +72,16 @@ function generatePixCode(payload: PixPayload): string {
 }
 
 export async function POST(request: NextRequest) {
+    if (!FEATURE_ENABLED) {
+        return NextResponse.json(
+            {
+                error: 'Automatic PIX is not enabled yet',
+                message: 'Please use manual PIX payment for now. Automatic PIX will be available in v5.0.'
+            },
+            { status: 503 }
+        );
+    }
+
     try {
         const body = await request.json();
         const { amount, orderId, customerEmail } = body;
@@ -95,20 +104,28 @@ export async function POST(request: NextRequest) {
 
         const qrCode = generatePixCode(pixPayload);
 
-        try {
-            await stripe.paymentIntents.create({
-                amount: Math.round(amount * 100),
-                currency: 'brl',
-                payment_method_types: ['pix'],
-                receipt_email: customerEmail,
-                metadata: {
-                    orderId,
-                    paymentType: 'pix',
-                },
-                description: `Pedido Foodie #${orderId}`,
-            });
-        } catch (stripeError) {
-            console.log('Stripe Pix not fully configured, using fallback');
+        // ✅ SÓ IMPORTAR STRIPE SE REALMENTE FOR USAR
+        if (process.env.STRIPE_SECRET_KEY) {
+            try {
+                const Stripe = (await import('stripe')).default;
+                const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+                    apiVersion: '2026-02-25.clover',
+                });
+
+                await stripe.paymentIntents.create({
+                    amount: Math.round(amount * 100),
+                    currency: 'brl',
+                    payment_method_types: ['card'],
+                    receipt_email: customerEmail,
+                    metadata: {
+                        orderId,
+                        paymentType: 'pix',
+                    },
+                    description: `Pedido Foodie #${orderId}`,
+                });
+            } catch (stripeError) {
+                console.log('Stripe Pix not configured, using fallback');
+            }
         }
 
         return NextResponse.json({

@@ -2,7 +2,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { OrderStatus } from '@prisma/client'
+import { OrderStatus, Prisma } from '@prisma/client'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
@@ -44,9 +44,19 @@ export interface OrderData {
     updatedAt: string
 }
 
-// Função helper para validar o status
 function isValidOrderStatus(status: string): status is OrderStatus {
     return Object.values(OrderStatus).includes(status as OrderStatus)
+}
+
+// ✅ HELPER para converter JSON do Prisma
+function parseOrderItems(items: unknown): OrderItemData[] {
+    if (Array.isArray(items)) {
+        return items as OrderItemData[]
+    }
+    if (typeof items === 'string') {
+        return JSON.parse(items)
+    }
+    return []
 }
 
 export async function createOrder(orderData: {
@@ -81,39 +91,50 @@ export async function createOrder(orderData: {
         return { error: 'Usuário não autenticado' }
     }
 
-    // Calculate estimated delivery (40-60 min from now)
     const estimatedMinutes = 40 + Math.floor(Math.random() * 20)
     const estimatedDelivery = new Date(
         Date.now() + estimatedMinutes * 60 * 1000
     ).toISOString()
 
-    const { data, error } = await supabase
-        .from('orders')
-        .insert({
-            user_id: user.id,
-            restaurant_id: orderData.restaurantId,
-            restaurant_name: orderData.restaurantName,
-            status: 'PENDING',
-            items: JSON.stringify(orderData.items),
-            address: JSON.stringify(orderData.address),
-            payment_method: orderData.paymentMethod,
-            change_for: orderData.changeFor || null,
-            subtotal: orderData.subtotal,
-            delivery_fee: orderData.deliveryFee,
-            discount: orderData.discount,
-            total: orderData.total,
-            coupon_code: orderData.couponCode || null,
-            estimated_delivery: estimatedDelivery,
+    try {
+        const order = await prisma.order.create({
+            data: {
+                customer_name: user.email || 'Cliente',
+                customer_phone: null,
+                order_type: 'DELIVERY',
+                delivery_address: JSON.stringify(orderData.address),
+                status: OrderStatus.PENDING,
+                items: orderData.items as unknown as Prisma.InputJsonValue, // ✅ CORRIGIDO
+                total: orderData.total,
+                restaurant_id: orderData.restaurantId, // ✅ SNAKE_CASE
+            },
         })
-        .select()
-        .single()
 
-    if (error) {
+        return {
+            data: {
+                id: order.id,
+                userId: user.id,
+                restaurantId: order.restaurant_id,
+                restaurantName: orderData.restaurantName,
+                status: order.status,
+                items: orderData.items,
+                address: orderData.address,
+                paymentMethod: orderData.paymentMethod,
+                changeFor: orderData.changeFor || null,
+                subtotal: orderData.subtotal,
+                deliveryFee: orderData.deliveryFee,
+                discount: orderData.discount,
+                total: order.total,
+                couponCode: orderData.couponCode || null,
+                estimatedDelivery,
+                deliveredAt: null,
+                createdAt: order.created_at.toISOString(),
+                updatedAt: order.updated_at.toISOString(),
+            },
+        }
+    } catch (error) {
+        console.error('Erro ao criar pedido:', error)
         return { error: 'Erro ao criar pedido. Tente novamente.' }
-    }
-
-    return {
-        data: mapOrderFromDB(data),
     }
 }
 
@@ -129,19 +150,53 @@ export async function getOrders(): Promise<{ data?: OrderData[]; error?: string 
         return { error: 'Usuário não autenticado' }
     }
 
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+    try {
+        const orders = await prisma.order.findMany({
+            where: {
+                customer_name: user.email || '',
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
+        })
 
-    if (error) {
+        const mappedOrders: OrderData[] = orders.map(order => {
+            const items = parseOrderItems(order.items) // ✅ USANDO HELPER
+
+            let address = { street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+            if (order.delivery_address) {
+                if (typeof order.delivery_address === 'string') {
+                    address = JSON.parse(order.delivery_address)
+                }
+            }
+
+            return {
+                id: order.id,
+                userId: user.id,
+                restaurantId: order.restaurant_id,
+                restaurantName: '',
+                status: order.status,
+                items,
+                address,
+                paymentMethod: 'Dinheiro',
+                changeFor: null,
+                subtotal: order.total,
+                deliveryFee: 0,
+                discount: 0,
+                total: order.total,
+                couponCode: null,
+                estimatedDelivery: null,
+                deliveredAt: null,
+                createdAt: order.created_at.toISOString(),
+                updatedAt: order.updated_at.toISOString(),
+            }
+        })
+
+        return { data: mappedOrders }
+    } catch (error) {
+        console.error('Erro ao buscar pedidos:', error)
         return { error: 'Erro ao carregar pedidos' }
     }
-
-    const orders: OrderData[] = (data || []).map(mapOrderFromDB)
-
-    return { data: orders }
 }
 
 export async function getOrderById(
@@ -158,18 +213,52 @@ export async function getOrderById(
         return { error: 'Usuário não autenticado' }
     }
 
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .eq('user_id', user.id)
-        .single()
+    try {
+        const order = await prisma.order.findUnique({
+            where: {
+                id: orderId,
+            },
+        })
 
-    if (error) {
+        if (!order) {
+            return { error: 'Pedido não encontrado' }
+        }
+
+        const items = parseOrderItems(order.items) // ✅ USANDO HELPER
+
+        let address = { street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+        if (order.delivery_address) {
+            if (typeof order.delivery_address === 'string') {
+                address = JSON.parse(order.delivery_address)
+            }
+        }
+
+        const orderData: OrderData = {
+            id: order.id,
+            userId: user.id,
+            restaurantId: order.restaurant_id,
+            restaurantName: '',
+            status: order.status,
+            items,
+            address,
+            paymentMethod: 'Dinheiro',
+            changeFor: null,
+            subtotal: order.total,
+            deliveryFee: 0,
+            discount: 0,
+            total: order.total,
+            couponCode: null,
+            estimatedDelivery: null,
+            deliveredAt: null,
+            createdAt: order.created_at.toISOString(),
+            updatedAt: order.updated_at.toISOString(),
+        }
+
+        return { data: orderData }
+    } catch (error) {
+        console.error('Erro ao buscar pedido:', error)
         return { error: 'Pedido não encontrado' }
     }
-
-    return { data: mapOrderFromDB(data) }
 }
 
 export async function updateOrderStatus({
@@ -181,12 +270,10 @@ export async function updateOrderStatus({
     newStatus: string
     restaurantId: string
 }): Promise<{ success?: boolean; error?: string }> {
-    // Validar o status primeiro
     if (!isValidOrderStatus(newStatus)) {
         return { error: 'Status inválido' }
     }
 
-    // 1. Verificar autenticação
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -194,11 +281,10 @@ export async function updateOrderStatus({
         return { error: 'Usuário não autenticado' }
     }
 
-    // 2. Verificar se o usuário é dono do restaurante
     const restaurant = await prisma.restaurant.findFirst({
         where: {
             id: restaurantId,
-            owner_id: user.id,
+            user_id: user.id, // ✅ SNAKE_CASE
         },
     })
 
@@ -206,16 +292,15 @@ export async function updateOrderStatus({
         return { error: 'Não autorizado ou restaurante não encontrado' }
     }
 
-    // 3. Atualizar o pedido
     try {
         await prisma.order.update({
             where: {
                 id: orderId,
-                restaurantId: restaurantId,
+                restaurant_id: restaurantId, // ✅ SNAKE_CASE
             },
             data: {
                 status: newStatus,
-                updatedAt: new Date(),
+                updated_at: new Date(),
             },
         })
 
@@ -224,29 +309,5 @@ export async function updateOrderStatus({
     } catch (error) {
         console.error('Erro ao atualizar pedido:', error)
         return { error: 'Erro ao atualizar pedido' }
-    }
-}
-
-// Helper to map DB row to OrderData
-function mapOrderFromDB(row: Record<string, unknown>): OrderData {
-    return {
-        id: row.id as string,
-        userId: row.user_id as string,
-        restaurantId: row.restaurant_id as string,
-        restaurantName: row.restaurant_name as string,
-        status: row.status as string,
-        items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items as OrderItemData[],
-        address: typeof row.address === 'string' ? JSON.parse(row.address) : row.address as OrderData['address'],
-        paymentMethod: row.payment_method as string,
-        changeFor: row.change_for as number | null,
-        subtotal: Number(row.subtotal),
-        deliveryFee: Number(row.delivery_fee),
-        discount: Number(row.discount),
-        total: Number(row.total),
-        couponCode: row.coupon_code as string | null,
-        estimatedDelivery: row.estimated_delivery as string | null,
-        deliveredAt: row.delivered_at as string | null,
-        createdAt: row.created_at as string,
-        updatedAt: row.updated_at as string,
     }
 }

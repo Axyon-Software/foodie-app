@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Settings, Bell, Utensils, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getUserPreferences, updateUserPreferences } from '@/actions/profile-actions';
+import { getUserPreferences, updateUserPreferences } from '@/actions/profileActions';
 import { UserPreferences } from '@/types/user-profile.types';
 
 const CUISINES = [

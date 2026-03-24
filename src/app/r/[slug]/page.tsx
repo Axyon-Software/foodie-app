@@ -11,29 +11,47 @@ export default async function RestaurantPage({
 }) {
     const { slug } = await params;
 
-    // ✅ Correção: Busca no campo 'subdomain' usando o valor de 'slug'
-    const restaurant = await prisma.restaurant.findUnique({
+    const restaurantData = await prisma.restaurant.findUnique({
         where: { subdomain: slug },
         include: {
             categories: {
                 include: {
                     products: {
-                        where: { isAvailable: true },
+                        where: { is_available: true },
                         orderBy: { name: "asc" },
                     },
                 },
-                orderBy: { name: "asc" }, // Ou displayOrder se tiver no schema
+                orderBy: { sort_order: "asc" },
             },
         },
     });
 
-    if (!restaurant) {
+    if (!restaurantData) {
         notFound();
     }
 
+    // ✅ MAPEAR PARA O FORMATO QUE OS COMPONENTES ESPERAM
+    const restaurant = {
+        ...restaurantData,
+        categories: restaurantData.categories.map(category => ({
+            id: category.id,
+            name: category.name,
+            restaurantId: category.restaurant_id, // ✅ Converte snake → camel
+            products: category.products.map(product => ({
+                id: product.id,
+                name: product.name,
+                description: product.description,
+                price: product.price,
+                imageUrl: product.image, // ✅ image → imageUrl
+                isAvailable: product.is_available, // ✅ is_available → isAvailable
+                restaurantId: product.restaurant_id, // ✅ restaurant_id → restaurantId
+            }))
+        }))
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pb-28">
-            <RestaurantHeader restaurant={restaurant} />
+            <RestaurantHeader restaurant={restaurantData} />
             <MenuSection categories={restaurant.categories} />
         </div>
     );

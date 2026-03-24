@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Store, MapPin, Phone, Mail, Clock, DollarSign, Image, ChevronLeft, Loader2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { createRestaurant } from '@/actions/restaurant-actions';
+import { createRestaurant } from '@/actions/restaurantActions';
 
 const CATEGORIES = [
     'Lanchonete', 'Restaurante', 'Pizzaria', 'Sorveteria', 'Fast Food',

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getRestaurantProfile, updateRestaurantStatus } from '@/actions/restaurant-actions';
+import { getRestaurantProfile, updateRestaurantStatus } from '@/actions/restaurantActions';
 import { RestaurantProfile, RestaurantStatus } from '@/types/restaurant-management.types';
 
 interface MenuItem {

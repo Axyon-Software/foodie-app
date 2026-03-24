@@ -1,4 +1,4 @@
-// src/tests/components/cart/CouponInput.test.tsx
+
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '../../utils/test-utils';
 import CouponInput from '../../../components/cart/CouponInput';

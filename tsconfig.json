@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "lib": [
       "dom",
       "dom.iterable",
@@ -28,14 +29,16 @@
     },
     "types": [
       "vitest/globals",
-      "@testing-library/jest-dom"
+      "@testing-library/jest-dom",
+      "node"
     ],
-    "target": "ES2017"
+    "target": "ESNext"
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "src/**/*",
     ".next/types/**/*.ts",
     "src/tests/vitest.d.ts",
     ".next/dev/types/**/*.ts"

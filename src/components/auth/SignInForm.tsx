@@ -43,10 +43,19 @@ export function SignInForm() {
         setIsLoading(true)
         try {
             const response = await signInWithEmail({ email, password })
-            if (response?.error) {
-                setServerError(getAuthErrorMessage(response.error))
+            
+            // Se não houve resposta (redirect aconteceu), não fazer nada
+            if (!response) {
+                return
             }
-        } catch {
+            
+            if (response.error) {
+                const message = getAuthErrorMessage(response.error)
+                setServerError(message)
+                console.log('Login error:', response.error)
+            }
+        } catch (error) {
+            console.error('Login catch error:', error)
             setServerError('Ocorreu um erro inesperado. Tente novamente.')
         } finally {
             setIsLoading(false)
@@ -139,13 +148,13 @@ export function SignInForm() {
 
                     {/* Forgot password */}
                     <div className="flex justify-end">
-                        <button
-                            type="button"
+                        <Link
+                            href="/forgot-password"
                             className="text-xs font-medium transition-colors hover:underline"
                             style={{ color: 'var(--color-primary)' }}
                         >
                             {AUTH_MESSAGES.FORGOT_PASSWORD}
-                        </button>
+                        </Link>
                     </div>
 
                     {/* Submit */}

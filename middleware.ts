@@ -2,6 +2,37 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+type UserRole = 'CLIENTE' | 'ADMIN' | 'GERENCIADOR' | 'EQUIPE'
+
+interface RouteConfig {
+    path: string
+    roles: UserRole[]
+}
+
+const routeConfigs: RouteConfig[] = [
+    { path: '/admin', roles: ['ADMIN'] },
+    { path: '/gerenciador', roles: ['ADMIN', 'GERENCIADOR'] },
+    { path: '/equipe', roles: ['ADMIN', 'GERENCIADOR', 'EQUIPE'] },
+]
+
+async function getUserRole(
+    supabase: ReturnType<typeof createServerClient>,
+    userId: string
+): Promise<UserRole | null> {
+    try {
+        const { data } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single()
+
+        return data?.role || 'CLIENTE'
+    } catch {
+        // Table might not exist or other error
+        return 'CLIENTE'
+    }
+}
+
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
         request,
@@ -43,6 +74,32 @@ export async function middleware(request: NextRequest) {
     const isDashboardRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
 
     if (isDashboardRoute && !user) {
+    // Protected routes - redirect to sign-in if not authenticated
+    const protectedRoutes = ['/profile', '/orders', '/addresses', '/cart', '/favorites', '/checkout']
+    const isProtectedRoute = protectedRoutes.some(route =>
+        request.nextUrl.pathname.startsWith(route)
+    )
+
+    // Role-based routes
+    const isRoleBasedRoute = routeConfigs.some(config =>
+        request.nextUrl.pathname.startsWith(config.path)
+    )
+
+    // Handle role-based routes
+    if (isRoleBasedRoute && user) {
+        const userRole = await getUserRole(supabase, user.id)
+        const matchedConfig = routeConfigs.find(config =>
+            request.nextUrl.pathname.startsWith(config.path)
+        )
+
+        if (matchedConfig && userRole && !matchedConfig.roles.includes(userRole)) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/'
+            return NextResponse.redirect(url)
+        }
+    }
+
+    if (isProtectedRoute && !user) {
         const url = request.nextUrl.clone()
         url.pathname = '/sign-in'
         url.searchParams.set('redirectTo', pathname)

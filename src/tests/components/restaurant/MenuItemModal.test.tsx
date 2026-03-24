@@ -1,4 +1,3 @@
-// src/tests/components/restaurant/MenuItemModal.test.tsx
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '../../utils/test-utils';
 import MenuItemModal from '../../../components/restaurant/MenuItemModal';
@@ -32,7 +31,7 @@ describe('MenuItemModal', () => {
     it('should render item price', () => {
         render(<MenuItemModal {...defaultProps} />);
 
-        // O preço aparece duas vezes: no corpo e no botão
+
         const priceElements = screen.getAllByText(/29,90/);
         expect(priceElements.length).toBeGreaterThanOrEqual(1);
     });
@@ -76,7 +75,7 @@ describe('MenuItemModal', () => {
         const incrementButton = screen.getByLabelText(/aumentar/i);
         await user.click(incrementButton);
 
-        // 29.90 * 2 = 59.80
+
         const priceElements = screen.getAllByText(/59,80/);
         expect(priceElements.length).toBeGreaterThanOrEqual(1);
     });

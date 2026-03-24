@@ -1,7 +1,7 @@
 // src/components/layout/Header.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { ShoppingBag, MapPin, User, ArrowLeft } from 'lucide-react'
@@ -24,14 +24,22 @@ export default function Header() {
     const { items, totalItems, setIsCartOpen } = useCart()
     const [user, setUser] = useState<UserData | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(true)
+    const [mounted, setMounted] = useState<boolean>(false)
 
-    // Page detection
-    const isHomePage = pathname === '/'
-    const isAuthPage = pathname.startsWith('/sign')
-    const isSubPage = !isHomePage && !isAuthPage
+    // Page detection - use useMemo to avoid recalculation
+    const isHomePage = useMemo(() => pathname === '/', [pathname])
+    const isAuthPage = useMemo(() => pathname.startsWith('/sign') || pathname.startsWith('/forgot') || pathname.startsWith('/reset'), [pathname])
+    const isSubPage = useMemo(() => !isHomePage && !isAuthPage, [isHomePage, isAuthPage])
+
+    // Prevent hydration mismatch
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     // Fetch user session
     useEffect(() => {
+        if (!mounted) return
+
         const supabase = createClient()
 
         const fetchUser = async (): Promise<void> => {
@@ -69,10 +77,10 @@ export default function Header() {
         )
 
         return () => subscription.unsubscribe()
-    }, [])
+    }, [mounted])
 
-    // Don't show header on auth pages
-    if (isAuthPage) return null
+    // Don't show header on auth pages - but wait for mount
+    if (!mounted || isAuthPage) return null
 
     const handleGoBack = (): void => {
         router.back()
@@ -155,12 +163,12 @@ export default function Header() {
                             onClick={handleCartClick}
                             className="relative rounded-full p-3 transition-colors hover:opacity-80"
                             style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-                            aria-label={`Carrinho com ${totalItems} itens`}
+                            aria-label={mounted ? `Carrinho com ${totalItems} itens` : 'Carrinho'}
                         >
                             <ShoppingBag size={24} style={{ color: 'var(--color-text)' }} />
 
                             <AnimatePresence>
-                                {totalItems > 0 && (
+                                {mounted && totalItems > 0 && (
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}

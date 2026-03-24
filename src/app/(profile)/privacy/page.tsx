@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Shield, Eye, Bell, Key, Trash2, AlertTriangle, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getUserPrivacySettings, updateUserPrivacySettings } from '@/actions/profile-actions';
+import { getUserPrivacySettings, updateUserPrivacySettings } from '@/actions/profileActions';
 import { UserPrivacySettings } from '@/types/user-profile.types';
 
 interface ToggleProps {

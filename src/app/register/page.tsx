@@ -3,7 +3,7 @@
 "use client";
 
 import { useActionState } from "react"; // Se der erro na sua versão do Next, troque para: import { useFormState } from "react-dom";
-import { registerRestaurant } from "@/actions/restaurant";
+import { registerRestaurant } from "@/actions/restaurantActions";
 import { useFormStatus } from "react-dom";
 import { Store, Link2, Loader2 } from "lucide-react";
 

@@ -3,7 +3,7 @@
 "use client";
 
 import { useRef } from "react";
-import { createCategory } from "@/actions/category";
+import { createCategory } from "@/actions/categoryActions";
 import { useFormStatus } from "react-dom";
 import { Plus, Loader2 } from "lucide-react";
 

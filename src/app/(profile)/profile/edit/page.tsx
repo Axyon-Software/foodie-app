@@ -3,15 +3,16 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Save, Loader2, User, Mail, Phone, ChevronLeft, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { formatPhoneInput } from '@/lib/utils/format.utils';
+import { getUserProfile, updateUserProfile } from '@/actions/profileActions';
 
 export default function EditProfilePage() {
     const router = useRouter();
-    const { user, profile, updateProfile } = useAuth();
+    const { user } = useAuth();
+    const [profile, setProfile] = useState<any>(null);
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -19,16 +20,33 @@ export default function EditProfilePage() {
     const [hasChanges, setHasChanges] = useState(false);
 
     useEffect(() => {
-        if (profile) {
-            setFullName(profile.fullName || '');
-            setPhone(profile.phone ? formatPhoneInput(profile.phone) : '');
+        async function loadProfile() {
+            if (!user) {
+                router.push('/auth/login');
+                return;
+            }
+
+            const { data, error } = await getUserProfile();
+            if (error) {
+                toast.error(error);
+                setIsLoading(false);
+                return;
+            }
+
+            if (data) {
+                setProfile(data);
+                setFullName(data.full_name || '');
+                setPhone(data.phone ? formatPhoneInput(data.phone) : '');
+            }
             setIsLoading(false);
         }
-    }, [profile]);
+
+        loadProfile();
+    }, [user, router]);
 
     useEffect(() => {
         if (profile) {
-            const nameChanged = fullName !== (profile.fullName || '');
+            const nameChanged = fullName !== (profile.full_name || '');
             const phoneDigits = phone.replace(/\D/g, '');
             const phoneChanged = phoneDigits !== (profile.phone || '');
             setHasChanges(nameChanged || phoneChanged);
@@ -42,8 +60,8 @@ export default function EditProfilePage() {
         setIsSaving(true);
         const phoneDigits = phone.replace(/\D/g, '');
 
-        const result = await updateProfile({
-            fullName,
+        const result = await updateUserProfile({
+            full_name: fullName,
             phone: phoneDigits,
         });
 
@@ -67,7 +85,7 @@ export default function EditProfilePage() {
     return (
         <div className="min-h-screen pb-20" style={{ backgroundColor: 'var(--color-bg)' }}>
             {/* Header */}
-            <div 
+            <div
                 className="p-4 border-b sticky top-0 z-10"
                 style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border)' }}
             >
@@ -85,10 +103,10 @@ export default function EditProfilePage() {
                 {/* Avatar */}
                 <div className="flex flex-col items-center py-6">
                     <div className="relative">
-                        {profile?.avatarUrl ? (
-                            <img 
-                                src={profile.avatarUrl} 
-                                alt={profile.fullName || 'User'}
+                        {profile?.avatar_url ? (
+                            <img
+                                src={profile.avatar_url}
+                                alt={profile.full_name || 'User'}
                                 className="w-24 h-24 rounded-full object-cover"
                             />
                         ) : (
@@ -99,7 +117,6 @@ export default function EditProfilePage() {
                         <button
                             type="button"
                             className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#00A082] flex items-center justify-center"
-                            style={{ backgroundColor: '#00A082' }}
                         >
                             <Camera size={16} className="text-white" />
                         </button>
@@ -122,8 +139,8 @@ export default function EditProfilePage() {
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#00A082]"
-                            style={{ 
-                                backgroundColor: 'var(--color-bg-input)', 
+                            style={{
+                                backgroundColor: 'var(--color-bg-input)',
                                 color: 'var(--color-text)',
                                 borderWidth: '1px',
                                 borderStyle: 'solid',
@@ -140,11 +157,11 @@ export default function EditProfilePage() {
                         </label>
                         <input
                             type="email"
-                            value={profile?.email || ''}
+                            value={user?.email || ''}
                             readOnly
                             className="w-full px-4 py-3 rounded-xl opacity-60 cursor-not-allowed"
-                            style={{ 
-                                backgroundColor: 'var(--color-bg-tertiary)', 
+                            style={{
+                                backgroundColor: 'var(--color-bg-tertiary)',
                                 color: 'var(--color-text-secondary)',
                                 borderWidth: '1px',
                                 borderStyle: 'solid',
@@ -165,11 +182,11 @@ export default function EditProfilePage() {
                         <input
                             type="tel"
                             value={phone}
-                            onChange={(e) => setFullName(formatPhoneInput(e.target.value))}
+                            onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
                             placeholder="(00) 00000-0000"
                             className="w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#00A082]"
-                            style={{ 
-                                backgroundColor: 'var(--color-bg-input)', 
+                            style={{
+                                backgroundColor: 'var(--color-bg-input)',
                                 color: 'var(--color-text)',
                                 borderWidth: '1px',
                                 borderStyle: 'solid',

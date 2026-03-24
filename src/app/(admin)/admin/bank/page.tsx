@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { CreditCard, Building, Key, User, FileText, ChevronLeft, Loader2, Shield, CheckCircle, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { updateBankInfo } from '@/actions/restaurant-actions';
+import { updateBankInfo } from '@/actions/restaurantActions';
 import { BankInfo } from '@/types/restaurant-management.types';
 
 const BANKS = [

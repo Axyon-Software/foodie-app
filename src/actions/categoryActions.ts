@@ -1,143 +1,184 @@
 // src/actions/categoryActions.ts
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+// ============================================================================
+// SCHEMAS DE VALIDAÇÃO
+// ============================================================================
+
 const categorySchema = z.object({
-    restaurantId: z.string().uuid('ID de restaurante inválido'),
+    restaurantId: z.string().min(1, 'ID de restaurante é obrigatório'),
     name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
     description: z.string().optional(),
     icon: z.string().optional(),
-    image: z.string().url().optional().or(z.literal('')),
+    image: z.string().optional(),
     sortOrder: z.number().int().min(0).optional().default(0),
-    isActive: z.boolean().optional().default(true),
 })
 
+// ============================================================================
+// FUNÇÕES DE LEITURA (GET)
+// ============================================================================
+
 export async function getCategories(restaurantId: string) {
-    const supabase = await createClient()
-    
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
-    
-    if (error) {
-        return { error: error.message, categories: [] }
+    try {
+        const categories = await prisma.category.findMany({
+            where: {
+                restaurant_id: restaurantId,
+            },
+            orderBy: {
+                sort_order: 'asc', // ✅ CORRETO AGORA
+            },
+        })
+
+        return { categories, error: null }
+    } catch (error) {
+        console.error('Error fetching categories:', error)
+        return { error: 'Erro ao buscar categorias', categories: [] }
     }
-    
-    return { categories: data || [], error: null }
 }
 
 export async function getCategory(categoryId: string) {
-    const supabase = await createClient()
-    
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('id', categoryId)
-        .single()
-    
-    if (error) {
-        return { error: error.message, category: null }
+    try {
+        const category = await prisma.category.findUnique({
+            where: {
+                id: categoryId,
+            },
+        })
+
+        if (!category) {
+            return { error: 'Categoria não encontrada', category: null }
+        }
+
+        return { category, error: null }
+    } catch (error) {
+        console.error('Error fetching category:', error)
+        return { error: 'Erro ao buscar categoria', category: null }
     }
-    
-    return { category: data, error: null }
 }
+
+// ============================================================================
+// FUNÇÕES DE CRIAÇÃO (CREATE)
+// ============================================================================
 
 export async function createCategory(formData: FormData) {
-    const supabase = await createClient()
-    
-    const data = {
-        restaurant_id: formData.get('restaurantId'),
-        name: formData.get('name'),
-        description: formData.get('description') || null,
-        icon: formData.get('icon') || null,
-        image: formData.get('image') || null,
-        sort_order: Number(formData.get('sortOrder')) || 0,
-        is_active: true,
+    try {
+        const data = {
+            restaurantId: formData.get('restaurantId') as string,
+            name: formData.get('name') as string,
+            description: (formData.get('description') as string) || undefined,
+            icon: (formData.get('icon') as string) || undefined,
+            image: (formData.get('image') as string) || undefined,
+            sortOrder: formData.get('sortOrder')
+                ? Number(formData.get('sortOrder'))
+                : 0,
+        }
+
+        const result = categorySchema.safeParse(data)
+
+        if (!result.success) {
+            return { error: result.error.issues[0].message }
+        }
+
+        const category = await prisma.category.create({
+            data: {
+                restaurant_id: result.data.restaurantId,
+                name: result.data.name,
+                description: result.data.description,
+                icon: result.data.icon,
+                image: result.data.image,
+                sort_order: result.data.sortOrder, // ✅ CORRETO
+            },
+        })
+
+        revalidatePath('/dashboard/menu')
+        return { category, success: true }
+    } catch (error) {
+        console.error('Error creating category:', error)
+        return { error: 'Erro ao criar categoria' }
     }
-    
-    const result = categorySchema.safeParse(data)
-    
-    if (!result.success) {
-        return { error: result.error.issues[0].message }
-    }
-    
-    const { data: category, error } = await supabase
-        .from('categories')
-        .insert(result.data)
-        .select()
-        .single()
-    
-    if (error) {
-        return { error: error.message }
-    }
-    
-    return { category, success: true }
 }
+
+// ============================================================================
+// FUNÇÕES DE ATUALIZAÇÃO (UPDATE)
+// ============================================================================
 
 export async function updateCategory(categoryId: string, formData: FormData) {
-    const supabase = await createClient()
-    
-    const data = {
-        name: formData.get('name'),
-        description: formData.get('description') || null,
-        icon: formData.get('icon') || null,
-        image: formData.get('image') || null,
-        sort_order: Number(formData.get('sortOrder')) || 0,
-        is_active: formData.get('isActive') !== 'false',
-    }
-    
-    const { data: category, error } = await supabase
-        .from('categories')
-        .update(data)
-        .eq('id', categoryId)
-        .select()
-        .single()
-    
-    if (error) {
-        return { error: error.message }
-    }
-    
-    return { category, success: true }
-}
+    try {
+        const data = {
+            name: formData.get('name') as string,
+            description: (formData.get('description') as string) || null,
+            icon: (formData.get('icon') as string) || null,
+            image: (formData.get('image') as string) || null,
+            sort_order: formData.get('sortOrder')
+                ? Number(formData.get('sortOrder'))
+                : 0,
+        }
 
-export async function deleteCategory(categoryId: string) {
-    const supabase = await createClient()
-    
-    const { error } = await supabase
-        .from('categories')
-        .update({ isActive: false })
-        .eq('id', categoryId)
-    
-    if (error) {
-        return { error: error.message }
+        const category = await prisma.category.update({
+            where: {
+                id: categoryId,
+            },
+            data,
+        })
+
+        revalidatePath('/dashboard/menu')
+        return { category, success: true }
+    } catch (error) {
+        console.error('Error updating category:', error)
+        return { error: 'Erro ao atualizar categoria' }
     }
-    
-    return { success: true }
 }
 
 export async function reorderCategories(restaurantId: string, categoryIds: string[]) {
-    const supabase = await createClient()
-    
-    const updates = categoryIds.map((id, index) => ({
-        id,
-        sort_order: index,
-    }))
-    
-    for (const update of updates) {
-        const { error } = await supabase
-            .from('categories')
-            .update({ sort_order: update.sort_order })
-            .eq('id', update.id)
-        
-        if (error) {
-            return { error: error.message }
-        }
+    try {
+        await Promise.all(
+            categoryIds.map((id, index) =>
+                prisma.category.update({
+                    where: { id },
+                    data: { sort_order: index }, // ✅ CORRETO
+                })
+            )
+        )
+
+        revalidatePath('/dashboard/menu')
+        return { success: true }
+    } catch (error) {
+        console.error('Error reordering categories:', error)
+        return { error: 'Erro ao reordenar categorias' }
     }
-    
-    return { success: true }
+}
+
+// ============================================================================
+// FUNÇÕES DE EXCLUSÃO (DELETE)
+// ============================================================================
+
+export async function deleteCategory(categoryId: string) {
+    try {
+        const productsCount = await prisma.product.count({
+            where: {
+                category_id: categoryId,
+            },
+        })
+
+        if (productsCount > 0) {
+            return {
+                error: `Não é possível excluir. Existem ${productsCount} produto(s) nesta categoria.`
+            }
+        }
+
+        await prisma.category.delete({
+            where: {
+                id: categoryId,
+            },
+        })
+
+        revalidatePath('/dashboard/menu')
+        return { success: true }
+    } catch (error) {
+        console.error('Error deleting category:', error)
+        return { error: 'Erro ao excluir categoria' }
+    }
 }

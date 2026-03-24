@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { createProduct } from "@/actions/product";
+import { createProduct } from "@/actions/productActions";
 import { GripVertical, Plus, X, Loader2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 

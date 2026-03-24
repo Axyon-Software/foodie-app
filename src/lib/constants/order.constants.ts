@@ -11,6 +11,13 @@ export const ORDER_MESSAGES = {
     TRACK_ORDER: 'Acompanhar',
     REORDER: 'Pedir novamente',
     ITEMS_COUNT: (count: number) => `${count} ${count === 1 ? 'item' : 'itens'}`,
+    CANCEL_ORDER: 'Cancelar pedido',
+    CANCEL_CONFIRM: 'Tem certeza que deseja cancelar este pedido?',
+    CANCEL_SUCCESS: 'Pedido cancelado com sucesso',
+    CANCEL_ERROR: 'Erro ao cancelar pedido',
+    REVIEW_TITLE: 'Avaliar pedido',
+    REVIEW_SUCCESS: 'Avaliação enviada com sucesso',
+    SEARCH_PLACEHOLDER: 'Buscar por pedido, restaurante ou item...',
 } as const
 
 export const ORDER_STATUS_CONFIG: Record<string, {
@@ -74,3 +81,33 @@ export const ACTIVE_STATUSES = [
 ]
 
 export const COMPLETED_STATUSES = ['DELIVERED', 'CANCELLED']
+
+export const CANCELLABLE_STATUSES = ['PENDING', 'CONFIRMED']
+
+export const REVIEWABLE_STATUSES = ['DELIVERED']
+
+export const CANCEL_REASONS_CLIENT = [
+    'Mudei de ideia',
+    'Tempo de espera muito longo',
+    'Erro no pedido',
+    'Problema com pagamento',
+    'Outro motivo',
+]
+
+export const RESTAURANT_FILTER_OPTIONS = {
+    statuses: [
+        { value: 'ALL', label: 'Todos' },
+        { value: 'PENDING', label: 'Pendentes' },
+        { value: 'CONFIRMED', label: 'Confirmados' },
+        { value: 'PREPARING', label: 'Preparando' },
+        { value: 'READY', label: 'Prontos' },
+        { value: 'DELIVERED', label: 'Entregues' },
+        { value: 'CANCELLED', label: 'Cancelados' },
+    ],
+    orderTypes: [
+        { value: 'ALL', label: 'Todos' },
+        { value: 'DELIVERY', label: 'Delivery' },
+        { value: 'DINE_IN', label: 'No local' },
+        { value: 'PICKUP', label: 'Retirada' },
+    ],
+}

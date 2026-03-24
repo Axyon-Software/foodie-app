@@ -2,28 +2,45 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { OrderData } from '@/types';
+import { getOrders as getOrdersFromDB, type OrderData } from '@/actions/orders';
 
 const ORDERS_STORAGE_KEY = 'foodie-orders';
 
 export function useOrders() {
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [isHydrated, setIsHydrated] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // Hidratar do localStorage
+    // Load from DB first, fallback to localStorage
     useEffect(() => {
-        try {
-            const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
-            if (stored) {
-                setOrders(JSON.parse(stored));
+        const loadOrders = async () => {
+            try {
+                const result = await getOrdersFromDB();
+                if (result.data) {
+                    setOrders(result.data);
+                    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(result.data));
+                } else {
+                    // Fallback to localStorage
+                    const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
+                    if (stored) {
+                        setOrders(JSON.parse(stored));
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
+                if (stored) {
+                    setOrders(JSON.parse(stored));
+                }
             }
-        } catch (error) {
-            console.error('Error loading orders:', error);
-        }
-        setIsHydrated(true);
+            setIsLoading(false);
+            setIsHydrated(true);
+        };
+
+        loadOrders();
     }, []);
 
-    // Persistir no localStorage
+    // Persist to localStorage
     useEffect(() => {
         if (isHydrated) {
             try {
@@ -53,11 +70,24 @@ export function useOrders() {
         );
     }, []);
 
+    const refresh = useCallback(async () => {
+        try {
+            const result = await getOrdersFromDB();
+            if (result.data) {
+                setOrders(result.data);
+            }
+        } catch (error) {
+            console.error('Error refreshing orders:', error);
+        }
+    }, []);
+
     return {
         orders,
         addOrder,
         getOrderById,
         updateOrderStatus,
+        refresh,
         isHydrated,
+        isLoading,
     };
 }

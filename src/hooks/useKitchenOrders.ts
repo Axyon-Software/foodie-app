@@ -1,16 +1,16 @@
+// src/hooks/useKitchenOrders.ts
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
-// Exportar o tipo para uso em outros arquivos
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED'
 
 export type Order = {
     id: string
     customerName: string
-    status: OrderStatus  // <- Mudança aqui: de string para OrderStatus
+    status: OrderStatus
     items: any[]
     total: number
     tableNumber?: string
@@ -28,9 +28,15 @@ export function useKitchenOrders(restaurantId: string) {
     }, [])
 
     const fetchOrders = useCallback(async () => {
-        const res = await fetch(`/api/orders?restaurantId=${restaurantId}`)
-        const data = await res.json()
-        setOrders(data as Order[])  // <- Type assertion para garantir o tipo
+        try {
+            const res = await fetch(`/api/orders?restaurantId=${restaurantId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setOrders(data as Order[])
+            }
+        } catch (e) {
+            console.error('Erro ao buscar pedidos:', e)
+        }
     }, [restaurantId])
 
     useEffect(() => {
@@ -45,16 +51,16 @@ export function useKitchenOrders(restaurantId: string) {
                 {
                     event: '*',
                     schema: 'public',
-                    table: 'Order',
-                    filter: `restaurantId=eq.${restaurantId}`
+                    table: 'orders',
+                    filter: `restaurant_id=eq.${restaurantId}`
                 },
                 (payload) => {
                     console.log('Mudança detectada!', payload)
 
                     if (payload.eventType === 'INSERT' && payload.new.status === 'PENDING') {
                         newOrderSound?.play().catch(e => console.log('Som bloqueado'))
-                        toast.success(`🔔 Novo pedido #${payload.new.id.slice(-4)}!`, {
-                            description: `${payload.new.customerName} - ${payload.new.orderType === 'DINE_IN' ? 'Mesa ' + payload.new.tableNumber : 'Delivery'}`
+                        toast.success(`🔔 Novo pedido #${String(payload.new.id).slice(-4)}!`, {
+                            description: `${payload.new.customer_name} - ${payload.new.order_type === 'DINE_IN' ? 'Mesa ' + payload.new.table_number : 'Delivery'}`
                         })
                     }
 
@@ -67,6 +73,12 @@ export function useKitchenOrders(restaurantId: string) {
             supabase.removeChannel(channel)
         }
     }, [restaurantId, fetchOrders, newOrderSound])
+
+    // Poll every 15 seconds as fallback
+    useEffect(() => {
+        const interval = setInterval(fetchOrders, 15000)
+        return () => clearInterval(interval)
+    }, [fetchOrders])
 
     return { orders, refresh: fetchOrders }
 }

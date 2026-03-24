@@ -1,7 +1,7 @@
 // src/app/order/[id]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -15,13 +15,17 @@ import {
     Package,
     Home,
     Loader2,
+    XCircle,
+    RefreshCw,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/format.utils';
 import {
     getOrderById as getOrderFromDB,
-    updateOrderStatus as updateOrderInDB,
     type OrderData,
 } from '@/actions/orders';
+import { CANCELLABLE_STATUSES, REVIEWABLE_STATUSES } from '@/lib/constants/order.constants';
+import { CancelOrderModal } from '@/components/orders/CancelOrderModal';
+import { OrderReview } from '@/components/orders/OrderReview';
 
 const STATUS_STEPS = [
     { key: 'PENDING', label: 'Pedido recebido', icon: CheckCircle },
@@ -39,10 +43,6 @@ const PAYMENT_LABELS: Record<string, string> = {
     CASH: '💵 Dinheiro',
 };
 
-const STATUS_PROGRESSION = [
-    'PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERING', 'DELIVERED',
-];
-
 export default function OrderPage() {
     const params = useParams();
     const router = useRouter();
@@ -51,51 +51,57 @@ export default function OrderPage() {
     const [order, setOrder] = useState<OrderData | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [notFound, setNotFound] = useState<boolean>(false);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Load order from Supabase
-    useEffect(() => {
-        const loadOrder = async (): Promise<void> => {
-            const result = await getOrderFromDB(orderId)
+    const loadOrder = useCallback(async () => {
+        const result = await getOrderFromDB(orderId);
 
-            if (result.error || !result.data) {
-                setNotFound(true)
-                setIsLoading(false)
-                return
-            }
-
-            setOrder(result.data)
-            setIsLoading(false)
+        if (result.error || !result.data) {
+            setNotFound(true);
+            setIsLoading(false);
+            return;
         }
 
-        loadOrder()
-    }, [orderId])
+        setOrder(result.data);
+        setIsLoading(false);
+    }, [orderId]);
 
-    // Simulate status progression (demo only)
+    // Load order and setup polling for real-time updates
     useEffect(() => {
-        if (!order) return;
+        loadOrder();
 
-        const currentIndex = STATUS_PROGRESSION.indexOf(order.status);
+        // Poll every 10 seconds for real-time status updates
+        const interval = setInterval(() => {
+            if (order && !['DELIVERED', 'CANCELLED'].includes(order.status)) {
+                loadOrder();
+            }
+        }, 10000);
 
-        if (currentIndex < STATUS_PROGRESSION.length - 1) {
-            const timeout = setTimeout(async () => {
-                const nextStatus = STATUS_PROGRESSION[currentIndex + 1];
+        return () => clearInterval(interval);
+    }, [orderId, loadOrder]);
 
-                // ✅ CORREÇÃO: Passar objeto com todos os parâmetros necessários
-                await updateOrderInDB({
-                    orderId: order.id,
-                    newStatus: nextStatus,
-                    restaurantId: order.restaurantId,
-                });
-
-                // Update local state
-                setOrder((prev) =>
-                    prev ? { ...prev, status: nextStatus } : null
-                );
-            }, 5000);
-
+    // Also poll when order status changes
+    useEffect(() => {
+        if (order && !['DELIVERED', 'CANCELLED'].includes(order.status)) {
+            const timeout = setTimeout(loadOrder, 5000);
             return () => clearTimeout(timeout);
         }
-    }, [order]);
+    }, [order?.status, loadOrder]);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await loadOrder();
+        setIsRefreshing(false);
+    };
+
+    const handleCancelSuccess = () => {
+        loadOrder();
+    };
+
+    const handleReviewSubmitted = () => {
+        loadOrder();
+    };
 
     // Loading state
     if (isLoading) {
@@ -139,10 +145,11 @@ export default function OrderPage() {
         );
     }
 
-    const currentStepIndex = STATUS_STEPS.findIndex(
-        (s) => s.key === order.status
-    );
+    const currentStepIndex = STATUS_STEPS.findIndex((s) => s.key === order.status);
     const isDelivered = order.status === 'DELIVERED';
+    const isCancelled = order.status === 'CANCELLED';
+    const isCancellable = CANCELLABLE_STATUSES.includes(order.status);
+    const isReviewable = REVIEWABLE_STATUSES.includes(order.status);
 
     const estimatedTime = order.estimatedDelivery
         ? new Date(order.estimatedDelivery).toLocaleTimeString('pt-BR', {
@@ -162,19 +169,38 @@ export default function OrderPage() {
         return parts.filter(Boolean).join(', ');
     };
 
+    const getPreparationTimeDisplay = (): string | null => {
+        if (order.estimatedPreparationTime) {
+            return `${order.estimatedPreparationTime} min`;
+        }
+        return null;
+    };
+
     return (
         <div
             className="min-h-screen pb-8 transition-colors"
             style={{ backgroundColor: 'var(--color-bg-secondary)' }}
         >
-            {/* Success Header */}
-            <div className="bg-[#00A082] text-white p-6 text-center">
+            {/* Header */}
+            <div
+                className={`${
+                    isCancelled
+                        ? 'bg-[#FF4444]'
+                        : isDelivered
+                            ? 'bg-[#00A082]'
+                            : 'bg-[#00A082]'
+                } text-white p-6 text-center`}
+            >
                 <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
                 >
-                    <CheckCircle size={64} className="mx-auto mb-4" />
+                    {isCancelled ? (
+                        <XCircle size={64} className="mx-auto mb-4" />
+                    ) : (
+                        <CheckCircle size={64} className="mx-auto mb-4" />
+                    )}
                 </motion.div>
                 <motion.h1
                     initial={{ opacity: 0, y: 10 }}
@@ -182,146 +208,196 @@ export default function OrderPage() {
                     transition={{ delay: 0.4 }}
                     className="text-2xl font-bold mb-2"
                 >
-                    {isDelivered ? 'Pedido Entregue! 🎉' : 'Pedido Confirmado!'}
+                    {isCancelled
+                        ? 'Pedido Cancelado'
+                        : isDelivered
+                            ? 'Pedido Entregue! 🎉'
+                            : 'Pedido Confirmado!'}
                 </motion.h1>
                 <p className="text-white/80 text-sm">
                     Pedido #{order.id.slice(0, 8)}...
                 </p>
+
+                {/* Refresh button for active orders */}
+                {!isDelivered && !isCancelled && (
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className="mt-3 flex items-center gap-1 mx-auto text-white/80 text-xs hover:text-white transition-colors"
+                    >
+                        <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+                        Atualizar
+                    </button>
+                )}
             </div>
 
             <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-                {/* Estimated Time */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="rounded-2xl p-6 text-center border transition-colors"
-                    style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        borderColor: 'var(--color-border)',
-                    }}
-                >
-                    <Clock size={32} className="mx-auto mb-2 text-[#00A082]" />
-                    <p style={{ color: 'var(--color-text-secondary)' }}>
-                        {isDelivered ? 'Entregue às' : 'Previsão de entrega'}
-                    </p>
-                    <p
-                        className="text-3xl font-bold"
-                        style={{ color: 'var(--color-text)' }}
+                {/* Cancelled reason */}
+                {isCancelled && order.cancelReason && (
+                    <div
+                        className="rounded-2xl p-6 border transition-colors"
+                        style={{
+                            backgroundColor: 'rgba(255, 68, 68, 0.08)',
+                            borderColor: 'rgba(255, 68, 68, 0.2)',
+                        }}
                     >
-                        {estimatedTime}
-                    </p>
-                </motion.div>
+                        <p className="text-sm font-medium" style={{ color: '#FF4444' }}>
+                            Motivo do cancelamento
+                        </p>
+                        <p className="mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                            {order.cancelReason}
+                        </p>
+                        {order.cancelledAt && (
+                            <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                Cancelado em {new Date(order.cancelledAt).toLocaleString('pt-BR')}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {/* Estimated Time */}
+                {!isCancelled && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="rounded-2xl p-6 text-center border transition-colors"
+                        style={{
+                            backgroundColor: 'var(--color-bg-card)',
+                            borderColor: 'var(--color-border)',
+                        }}
+                    >
+                        <Clock size={32} className="mx-auto mb-2 text-[#00A082]" />
+                        <p style={{ color: 'var(--color-text-secondary)' }}>
+                            {isDelivered ? 'Entregue às' : 'Previsão de entrega'}
+                        </p>
+                        <p
+                            className="text-3xl font-bold"
+                            style={{ color: 'var(--color-text)' }}
+                        >
+                            {estimatedTime}
+                        </p>
+                        {getPreparationTimeDisplay() && !isDelivered && (
+                            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                Tempo estimado de preparo: {getPreparationTimeDisplay()}
+                            </p>
+                        )}
+                    </motion.div>
+                )}
 
                 {/* Progress Steps */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="rounded-2xl p-6 border transition-colors"
-                    style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        borderColor: 'var(--color-border)',
-                    }}
-                >
-                    <h2
-                        className="font-bold text-lg mb-6"
-                        style={{ color: 'var(--color-text)' }}
+                {!isCancelled && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="rounded-2xl p-6 border transition-colors"
+                        style={{
+                            backgroundColor: 'var(--color-bg-card)',
+                            borderColor: 'var(--color-border)',
+                        }}
                     >
-                        Acompanhe seu pedido
-                    </h2>
+                        <h2
+                            className="font-bold text-lg mb-6"
+                            style={{ color: 'var(--color-text)' }}
+                        >
+                            Acompanhe seu pedido
+                        </h2>
 
-                    <div className="space-y-4">
-                        {STATUS_STEPS.map((step, index) => {
-                            const StepIcon = step.icon;
-                            const isCompleted = index <= currentStepIndex;
-                            const isCurrent = index === currentStepIndex;
+                        <div className="space-y-4">
+                            {STATUS_STEPS.map((step, index) => {
+                                const StepIcon = step.icon;
+                                const isCompleted = index <= currentStepIndex;
+                                const isCurrent = index === currentStepIndex;
 
-                            return (
-                                <motion.div
-                                    key={step.key}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 0.5 + index * 0.1 }}
-                                    className="flex items-center gap-4"
-                                >
-                                    <div
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                                            isCompleted
-                                                ? 'bg-[#00A082] text-white'
-                                                : ''
-                                        }`}
-                                        style={{
-                                            backgroundColor: isCompleted
-                                                ? undefined
-                                                : 'var(--color-bg-secondary)',
-                                            color: isCompleted
-                                                ? undefined
-                                                : 'var(--color-text-tertiary)',
-                                        }}
+                                return (
+                                    <motion.div
+                                        key={step.key}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.5 + index * 0.1 }}
+                                        className="flex items-center gap-4"
                                     >
-                                        <StepIcon size={20} />
-                                    </div>
-
-                                    <div className="flex-1">
-                                        <p
-                                            className="font-medium"
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                                                isCompleted
+                                                    ? 'bg-[#00A082] text-white'
+                                                    : ''
+                                            }`}
                                             style={{
+                                                backgroundColor: isCompleted
+                                                    ? undefined
+                                                    : 'var(--color-bg-secondary)',
                                                 color: isCompleted
-                                                    ? 'var(--color-text)'
+                                                    ? undefined
                                                     : 'var(--color-text-tertiary)',
                                             }}
                                         >
-                                            {step.label}
-                                        </p>
-                                        {isCurrent && !isDelivered && (
-                                            <motion.p
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: [0.5, 1, 0.5] }}
-                                                transition={{
-                                                    repeat: Infinity,
-                                                    duration: 2,
-                                                }}
-                                                className="text-sm text-[#00A082]"
-                                            >
-                                                Em andamento...
-                                            </motion.p>
-                                        )}
-                                    </div>
+                                            <StepIcon size={20} />
+                                        </div>
 
-                                    {isCompleted && index < currentStepIndex && (
-                                        <CheckCircle
-                                            size={20}
-                                            className="text-[#00A082]"
-                                        />
-                                    )}
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                </motion.div>
+                                        <div className="flex-1">
+                                            <p
+                                                className="font-medium"
+                                                style={{
+                                                    color: isCompleted
+                                                        ? 'var(--color-text)'
+                                                        : 'var(--color-text-tertiary)',
+                                                }}
+                                            >
+                                                {step.label}
+                                            </p>
+                                            {isCurrent && !isDelivered && (
+                                                <motion.p
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                                    transition={{
+                                                        repeat: Infinity,
+                                                        duration: 2,
+                                                    }}
+                                                    className="text-sm text-[#00A082]"
+                                                >
+                                                    Em andamento...
+                                                </motion.p>
+                                            )}
+                                        </div>
+
+                                        {isCompleted && index < currentStepIndex && (
+                                            <CheckCircle
+                                                size={20}
+                                                className="text-[#00A082]"
+                                            />
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Delivery Address */}
-                <div
-                    className="rounded-2xl p-6 border transition-colors"
-                    style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        borderColor: 'var(--color-border)',
-                    }}
-                >
-                    <div className="flex items-center gap-3 mb-4">
-                        <MapPin size={24} className="text-[#00A082]" />
-                        <h2
-                            className="font-bold text-lg"
-                            style={{ color: 'var(--color-text)' }}
-                        >
-                            Endereço de entrega
-                        </h2>
+                {order.address.street && (
+                    <div
+                        className="rounded-2xl p-6 border transition-colors"
+                        style={{
+                            backgroundColor: 'var(--color-bg-card)',
+                            borderColor: 'var(--color-border)',
+                        }}
+                    >
+                        <div className="flex items-center gap-3 mb-4">
+                            <MapPin size={24} className="text-[#00A082]" />
+                            <h2
+                                className="font-bold text-lg"
+                                style={{ color: 'var(--color-text)' }}
+                            >
+                                Endereço de entrega
+                            </h2>
+                        </div>
+                        <p style={{ color: 'var(--color-text-secondary)' }}>
+                            {formatOrderAddress()}
+                        </p>
                     </div>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>
-                        {formatOrderAddress()}
-                    </p>
-                </div>
+                )}
 
                 {/* Payment Method */}
                 <div
@@ -458,8 +534,31 @@ export default function OrderPage() {
                     </div>
                 </div>
 
+                {/* Review Section (for delivered orders) */}
+                {isReviewable && (
+                    <OrderReview
+                        orderId={order.id}
+                        restaurantId={order.restaurantId}
+                        existingReview={order.review}
+                        onReviewSubmitted={handleReviewSubmitted}
+                    />
+                )}
+
                 {/* Actions */}
                 <div className="flex flex-col gap-3">
+                    {/* Cancel button */}
+                    {isCancellable && (
+                        <button
+                            onClick={() => setShowCancelModal(true)}
+                            className="block w-full py-4 rounded-full font-semibold transition-colors text-center text-[#FF4444]"
+                            style={{
+                                backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                            }}
+                        >
+                            Cancelar pedido
+                        </button>
+                    )}
+
                     <Link
                         href="/orders"
                         className="block w-full bg-[#00A082] text-white py-4 rounded-full font-semibold hover:bg-[#008F74] transition-colors text-center"
@@ -481,6 +580,14 @@ export default function OrderPage() {
                     </Link>
                 </div>
             </main>
+
+            {/* Cancel Modal */}
+            <CancelOrderModal
+                orderId={order.id}
+                isOpen={showCancelModal}
+                onClose={() => setShowCancelModal(false)}
+                onCancelled={handleCancelSuccess}
+            />
         </div>
     );
 }

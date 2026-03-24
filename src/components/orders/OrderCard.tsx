@@ -3,11 +3,10 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Star, Clock } from 'lucide-react'
 import { type OrderData } from '@/actions/orders'
-import { ORDER_STATUS_CONFIG, ORDER_MESSAGES, ACTIVE_STATUSES } from '@/lib/constants/order.constants'
-import { formatPrice } from '@/lib/utils/format.utils'
-import { formatDateBR } from '@/lib/utils/format.utils'
+import { ORDER_STATUS_CONFIG, ORDER_MESSAGES, ACTIVE_STATUSES, CANCELLABLE_STATUSES } from '@/lib/constants/order.constants'
+import { formatPrice, formatDateBR } from '@/lib/utils/format.utils'
 
 interface OrderCardProps {
     order: OrderData
@@ -39,6 +38,22 @@ export function OrderCard({ order, index }: OrderCardProps) {
         return formatDateBR(dateString)
     }
 
+    const getRemainingTime = (): string | null => {
+        if (!order.estimatedDelivery || order.status === 'DELIVERED' || order.status === 'CANCELLED') return null
+        const now = new Date()
+        const estimated = new Date(order.estimatedDelivery)
+        const diffMinutes = Math.floor((estimated.getTime() - now.getTime()) / 60000)
+        if (diffMinutes <= 0) return 'A qualquer momento'
+        if (diffMinutes < 60) return `~${diffMinutes} min`
+        const hours = Math.floor(diffMinutes / 60)
+        const mins = diffMinutes % 60
+        return `~${hours}h${mins > 0 ? `${mins}min` : ''}`
+    }
+
+    const remainingTime = getRemainingTime()
+    const isCancellable = CANCELLABLE_STATUSES.includes(order.status)
+    const hasReview = order.review !== null && order.review !== undefined
+
     return (
         <motion.button
             initial={{ opacity: 0, y: 12 }}
@@ -66,7 +81,7 @@ export function OrderCard({ order, index }: OrderCardProps) {
                         className="text-base font-semibold"
                         style={{ color: 'var(--color-text)' }}
                     >
-                        {order.restaurantName}
+                        {order.restaurantName || 'Restaurante'}
                     </h3>
                     <p
                         className="mt-0.5 text-xs"
@@ -77,7 +92,6 @@ export function OrderCard({ order, index }: OrderCardProps) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Status Badge */}
                     <span
                         className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
                         style={{
@@ -98,7 +112,6 @@ export function OrderCard({ order, index }: OrderCardProps) {
 
             {/* Items preview */}
             <div className="mb-3 flex items-center gap-3">
-                {/* Item images (max 3) */}
                 <div className="flex -space-x-2">
                     {order.items.slice(0, 3).map((item, i) => (
                         <img
@@ -123,7 +136,6 @@ export function OrderCard({ order, index }: OrderCardProps) {
                     )}
                 </div>
 
-                {/* Items summary */}
                 <p
                     className="flex-1 truncate text-sm"
                     style={{ color: 'var(--color-text-secondary)' }}
@@ -141,12 +153,30 @@ export function OrderCard({ order, index }: OrderCardProps) {
                     borderTopColor: 'var(--color-border)',
                 }}
             >
-                <span
-                    className="text-xs"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                >
-                    {ORDER_MESSAGES.ITEMS_COUNT(itemCount)}
-                </span>
+                <div className="flex items-center gap-3">
+                    <span
+                        className="text-xs"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                        {ORDER_MESSAGES.ITEMS_COUNT(itemCount)}
+                    </span>
+
+                    {/* Remaining time for active orders */}
+                    {remainingTime && (
+                        <span className="flex items-center gap-1 text-xs text-[#00A082]">
+                            <Clock size={12} />
+                            {remainingTime}
+                        </span>
+                    )}
+
+                    {/* Review indicator for delivered orders */}
+                    {order.status === 'DELIVERED' && hasReview && (
+                        <span className="flex items-center gap-1 text-xs text-[#FFAA00]">
+                            <Star size={12} fill="#FFAA00" />
+                            {order.review!.rating}
+                        </span>
+                    )}
+                </div>
 
                 <span
                     className="text-sm font-bold"
@@ -169,6 +199,13 @@ export function OrderCard({ order, index }: OrderCardProps) {
                     >
                         {ORDER_MESSAGES.TRACK_ORDER}
                     </span>
+                </div>
+            )}
+
+            {/* Cancelled reason */}
+            {order.status === 'CANCELLED' && order.cancelReason && (
+                <div className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: 'rgba(255, 68, 68, 0.08)', color: '#FF4444' }}>
+                    Motivo: {order.cancelReason}
                 </div>
             )}
         </motion.button>

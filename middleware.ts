@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
         request,
     })
 
+    // 1. Criar cliente Supabase e gerenciar cookies
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -30,30 +31,27 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    // IMPORTANT: DO NOT REMOVE auth.getUser()
-    // This refreshes the session if expired
+    // 2. Refresh da sessão (CRÍTICO: não remover)
     const {
         data: { user },
     } = await supabase.auth.getUser()
 
-    // Protected routes - redirect to sign-in if not authenticated
-    const protectedRoutes = ['/profile', '/orders', '/addresses']
-    const isProtectedRoute = protectedRoutes.some(route =>
-        request.nextUrl.pathname.startsWith(route)
-    )
+    const { pathname } = request.nextUrl
 
-    if (isProtectedRoute && !user) {
+    // 3. Rotas protegidas do Dashboard/Admin
+    // Só acessa se estiver autenticado
+    const isDashboardRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
+
+    if (isDashboardRoute && !user) {
         const url = request.nextUrl.clone()
         url.pathname = '/sign-in'
-        url.searchParams.set('redirectTo', request.nextUrl.pathname)
+        url.searchParams.set('redirectTo', pathname)
         return NextResponse.redirect(url)
     }
 
-    // Auth routes - redirect to home if already authenticated
-    const authRoutes = ['/sign-in', '/sign-up']
-    const isAuthRoute = authRoutes.some(route =>
-        request.nextUrl.pathname.startsWith(route)
-    )
+    // 4. Rotas de Auth
+    // Se já está logado, redireciona para home
+    const isAuthRoute = pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up')
 
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone()
@@ -61,18 +59,35 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
+    // 5. Rotas de Cliente (Profile, Pedidos, Endereços)
+    const protectedClientRoutes = ['/profile', '/orders', '/addresses']
+    const isProtectedClientRoute = protectedClientRoutes.some(route =>
+        pathname.startsWith(route)
+    )
+
+    if (isProtectedClientRoute && !user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/sign-in'
+        url.searchParams.set('redirectTo', pathname)
+        return NextResponse.redirect(url)
+    }
+
+    // 6. Rotas públicas (/r/[slug], /register, /)
+    // Liberadas para todos, Next.js resolve o roteamento via app/r/[slug]/page.tsx
+    // Nenhuma ação necessária aqui!
+
     return supabaseResponse
 }
 
 export const config = {
     matcher: [
         /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public files (icons, manifest, sw)
+         * Match all request paths except:
+         * - api routes
+         * - _next/static, _next/image (arquivos estáticos)
+         * - favicon.ico
+         * - arquivos de imagem/fonte/manifest
          */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js)$).*)',
+        '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js|css)$).*)',
     ],
 }

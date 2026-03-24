@@ -1,15 +1,18 @@
 // src/actions/orders.ts
 'use server'
 
+import { prisma } from '@/lib/prisma'
+import { OrderStatus } from '@prisma/client'
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 
 export interface OrderItemData {
     menuItemId: string
     menuItemName: string
-    menuItemImage: string
+    menuItemImage: string | null
     menuItemPrice: number
     quantity: number
-    observation?: string
+    observation?: string | undefined
 }
 
 export interface OrderData {
@@ -39,6 +42,11 @@ export interface OrderData {
     deliveredAt: string | null
     createdAt: string
     updatedAt: string
+}
+
+// Função helper para validar o status
+function isValidOrderStatus(status: string): status is OrderStatus {
+    return Object.values(OrderStatus).includes(status as OrderStatus)
 }
 
 export async function createOrder(orderData: {
@@ -164,38 +172,59 @@ export async function getOrderById(
     return { data: mapOrderFromDB(data) }
 }
 
-export async function updateOrderStatus(
-    orderId: string,
-    status: string
-): Promise<{ success?: boolean; error?: string }> {
-    const supabase = await createClient()
+export async function updateOrderStatus({
+                                            orderId,
+                                            newStatus,
+                                            restaurantId,
+                                        }: {
+    orderId: string
+    newStatus: string
+    restaurantId: string
+}): Promise<{ success?: boolean; error?: string }> {
+    // Validar o status primeiro
+    if (!isValidOrderStatus(newStatus)) {
+        return { error: 'Status inválido' }
+    }
 
-    const {
-        data: { user },
-        error: authError,
-    } = await supabase.auth.getUser()
+    // 1. Verificar autenticação
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
         return { error: 'Usuário não autenticado' }
     }
 
-    const updateData: Record<string, unknown> = { status }
+    // 2. Verificar se o usuário é dono do restaurante
+    const restaurant = await prisma.restaurant.findFirst({
+        where: {
+            id: restaurantId,
+            owner_id: user.id,
+        },
+    })
 
-    if (status === 'DELIVERED') {
-        updateData.delivered_at = new Date().toISOString()
+    if (!restaurant) {
+        return { error: 'Não autorizado ou restaurante não encontrado' }
     }
 
-    const { error } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', orderId)
-        .eq('user_id', user.id)
+    // 3. Atualizar o pedido
+    try {
+        await prisma.order.update({
+            where: {
+                id: orderId,
+                restaurantId: restaurantId,
+            },
+            data: {
+                status: newStatus,
+                updatedAt: new Date(),
+            },
+        })
 
-    if (error) {
+        revalidatePath('/dashboard/orders')
+        return { success: true }
+    } catch (error) {
+        console.error('Erro ao atualizar pedido:', error)
         return { error: 'Erro ao atualizar pedido' }
     }
-
-    return { success: true }
 }
 
 // Helper to map DB row to OrderData

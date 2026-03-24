@@ -32,9 +32,9 @@ export interface MenuItem {
     id: string;
     restaurantId: string;
     name: string;
-    description: string;
+    description: string | null | undefined;
     price: number;
-    image: string;
+    image: string | null;
     category: string;
     popular?: boolean;
     available?: boolean;

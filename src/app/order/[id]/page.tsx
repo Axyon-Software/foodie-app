@@ -80,8 +80,12 @@ export default function OrderPage() {
             const timeout = setTimeout(async () => {
                 const nextStatus = STATUS_PROGRESSION[currentIndex + 1];
 
-                // Update in Supabase
-                await updateOrderInDB(order.id, nextStatus);
+                // ✅ CORREÇÃO: Passar objeto com todos os parâmetros necessários
+                await updateOrderInDB({
+                    orderId: order.id,
+                    newStatus: nextStatus,
+                    restaurantId: order.restaurantId,
+                });
 
                 // Update local state
                 setOrder((prev) =>
@@ -371,7 +375,7 @@ export default function OrderPage() {
                                 className="flex items-center gap-3"
                             >
                                 <img
-                                    src={item.menuItemImage}
+                                    src={item.menuItemImage || '/placeholder.png'}
                                     alt={item.menuItemName}
                                     className="w-12 h-12 rounded-lg object-cover shrink-0"
                                 />

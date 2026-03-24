@@ -12,7 +12,7 @@ interface MenuItemCardProps {
     item: MenuItem;
 }
 
-export default function MenuItemCard({ item }: MenuItemCardProps) {
+export function MenuItemCard({ item }: MenuItemCardProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleOpenModal = (): void => {
@@ -65,7 +65,7 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
                 <div className="relative shrink-0">
                     <div className="relative w-28 h-28 rounded-xl overflow-hidden">
                         <Image
-                            src={item.image}
+                            src={item.image || '/placeholder.png'}
                             alt={item.name}
                             fill
                             className="object-cover"

@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model Restaurant {
+  id          String  @id @default(cuid())
+  name        String
+  subdomain   String  @unique // 👈 Dica: considere renomear para 'slug' no futuro
+  description String?
+  logo        String?
+  phone       String?
+
+  owner_id String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categories Category[]
+  products   Product[]
+  orders     Order[]
+}
+
+model Category {
+  id   String @id @default(cuid())
+  name String
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  products     Product[]
+
+  createdAt DateTime @default(now())
+
+  @@index([restaurantId])
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  imageUrl    String?
+  isAvailable Boolean @default(true)
+
+  categoryId   String
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([categoryId])
+}
+
+model Order {
+  id            String  @id @default(uuid())
+  customerName  String
+  customerPhone String?
+
+  orderType       String  @default("DINE_IN")
+  tableNumber     String?
+  deliveryAddress String?
+
+  status OrderStatus @default(PENDING)
+
+  items Json
+  total Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([createdAt])
+}

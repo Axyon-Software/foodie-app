@@ -99,7 +99,7 @@ export default function CartSidebar() {
                             {/* Imagem */}
                             <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0">
                                 <Image
-                                    src={item.menuItem.image}
+                                    src={item.menuItem.image || '/placeholder.png'}
                                     alt={item.menuItem.name}
                                     fill
                                     className="object-cover"

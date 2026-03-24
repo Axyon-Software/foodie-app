@@ -15,6 +15,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.2",
     "@stripe/react-stripe-js": "^5.6.1",
     "@stripe/stripe-js": "^8.11.0",
     "@supabase/ssr": "^0.8.0",
@@ -44,6 +45,7 @@
     "eslint-config-next": "16.1.6",
     "jsdom": "^28.1.0",
     "msw": "^2.12.10",
+    "prisma": "^6.19.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"

@@ -27,7 +27,7 @@ export default function CartItemCard({ item }: CartItemCardProps) {
         >
             <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0">
                 <Image
-                    src={menuItem.image}
+                    src={menuItem.image || '/placeholder.png'}  // ✅ Adicionar fallback
                     alt={menuItem.name}
                     fill
                     className="object-cover"
@@ -74,8 +74,8 @@ export default function CartItemCard({ item }: CartItemCardProps) {
                             className="font-bold text-lg w-8 text-center"
                             style={{ color: 'var(--color-text)' }}
                         >
-              {quantity}
-            </span>
+                            {quantity}
+                        </span>
 
                         <button
                             onClick={() => updateQuantity(menuItem.id, quantity + 1, observation)}

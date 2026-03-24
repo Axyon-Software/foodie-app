@@ -90,7 +90,7 @@ export default function MenuItemModal({
                 {/* Imagem do Item */}
                 <div className="relative h-48 sm:h-64">
                     <Image
-                        src={item.image}
+                        src={item.image || '/placeholder.png'}
                         alt={item.name}
                         fill
                         className="object-cover"

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Star, Clock, Bike } from 'lucide-react';
 import { getRestaurantById, getMenuCategoriesByRestaurant } from '@/data/mock';
 import { formatPrice } from '@/lib/utils/format.utils';
-import MenuItemCard from '@/components/restaurant/MenuItemCard';
+import { MenuItemCard } from '@/components/restaurant/MenuItemCard';
 import CartSidebar from '@/components/cart/CartSidebar';
 
 interface RestaurantPageProps {

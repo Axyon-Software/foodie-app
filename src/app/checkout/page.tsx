@@ -1,4 +1,3 @@
-// src/app/checkout/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCart } from '@/hooks/useCart';
+import { useAuth } from '@/hooks/useAuth';
 import { getRestaurantById } from '@/data/mock';
 import { formatPrice } from '@/lib/utils/format.utils';
 import {
@@ -19,7 +19,6 @@ import { CardDetails } from '@/types/payment.types';
 import { CHECKOUT_MESSAGES } from '@/lib/constants/checkout.constants';
 import { createOrder as createOrderAction, type OrderItemData } from '@/actions/orders';
 import { getAddresses, type AddressData } from '@/actions/addresses';
-import { createClient } from '@/lib/supabase/client';
 import CheckoutHeader from '@/components/checkout/CheckoutHeader';
 import AddressForm from '@/components/checkout/AddressForm';
 import PaymentForm from '@/components/checkout/PaymentForm';
@@ -37,13 +36,12 @@ export default function CheckoutPage() {
         clearCart,
     } = useCart();
 
-    // Auth state
-    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-    const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true)
+    // ✅ Usa AuthContext — fonte única da verdade
+    const { isAuthenticated, isLoading: isCheckingAuth } = useAuth();
 
     // Saved addresses
-    const [savedAddresses, setSavedAddresses] = useState<AddressData[]>([])
-    const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
+    const [savedAddresses, setSavedAddresses] = useState<AddressData[]>([]);
+    const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
 
     // Address form state
     const [addressData, setAddressData] = useState<AddressFormData>({
@@ -74,34 +72,25 @@ export default function CheckoutPage() {
     const actualDeliveryFee = isFreeDeliveryCoupon ? 0 : deliveryFee;
     const finalTotal = totalPrice + actualDeliveryFee - couponDiscount;
 
-    // Check auth and load saved addresses
+    // ✅ Carrega endereços quando autenticação estiver confirmada
     useEffect(() => {
-        const checkAuthAndLoadAddresses = async (): Promise<void> => {
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
+        if (!isAuthenticated || isCheckingAuth) return;
 
-            if (user) {
-                setIsAuthenticated(true)
+        const loadAddresses = async (): Promise<void> => {
+            const result = await getAddresses();
+            if (result.data && result.data.length > 0) {
+                setSavedAddresses(result.data);
 
-                // Load saved addresses
-                const result = await getAddresses()
-                if (result.data && result.data.length > 0) {
-                    setSavedAddresses(result.data)
-
-                    // Auto-select default address
-                    const defaultAddress = result.data.find((addr) => addr.isDefault)
-                    if (defaultAddress) {
-                        setSelectedAddressId(defaultAddress.id)
-                        fillAddressForm(defaultAddress)
-                    }
+                const defaultAddress = result.data.find((addr) => addr.isDefault);
+                if (defaultAddress) {
+                    setSelectedAddressId(defaultAddress.id);
+                    fillAddressForm(defaultAddress);
                 }
             }
+        };
 
-            setIsCheckingAuth(false)
-        }
-
-        checkAuthAndLoadAddresses()
-    }, [])
+        loadAddresses();
+    }, [isAuthenticated, isCheckingAuth]);
 
     const fillAddressForm = (address: AddressData): void => {
         setAddressData({
@@ -112,20 +101,18 @@ export default function CheckoutPage() {
             city: address.city,
             state: address.state,
             zipCode: address.zipCode,
-        })
-        setAddressErrors({})
-    }
+        });
+        setAddressErrors({});
+    };
 
     const handleSelectAddress = (addressId: string): void => {
-        setSelectedAddressId(addressId)
-        const address = savedAddresses.find((a) => a.id === addressId)
-        if (address) {
-            fillAddressForm(address)
-        }
-    }
+        setSelectedAddressId(addressId);
+        const address = savedAddresses.find((a) => a.id === addressId);
+        if (address) fillAddressForm(address);
+    };
 
     const handleUseNewAddress = (): void => {
-        setSelectedAddressId(null)
+        setSelectedAddressId(null);
         setAddressData({
             street: '',
             number: '',
@@ -134,11 +121,10 @@ export default function CheckoutPage() {
             city: '',
             state: '',
             zipCode: '',
-        })
-        setAddressErrors({})
-    }
+        });
+        setAddressErrors({});
+    };
 
-    // Handlers
     const handleAddressChange = (
         field: keyof AddressFormData,
         value: string
@@ -147,18 +133,13 @@ export default function CheckoutPage() {
         if (addressErrors[field]) {
             setAddressErrors((prev) => ({ ...prev, [field]: undefined }));
         }
-        // If user edits, deselect saved address
-        if (selectedAddressId) {
-            setSelectedAddressId(null)
-        }
+        if (selectedAddressId) setSelectedAddressId(null);
     };
 
     const handlePaymentMethodChange = (method: PaymentMethod): void => {
         setPaymentMethod(method);
         setPaymentError('');
-        if (method !== 'CASH') {
-            setChangeFor('');
-        }
+        if (method !== 'CASH') setChangeFor('');
     };
 
     const validateForm = (): boolean => {
@@ -184,7 +165,10 @@ export default function CheckoutPage() {
             isValid = false;
         }
 
-        if ((paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') && cardDetails) {
+        if (
+            (paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') &&
+            cardDetails
+        ) {
             const cardResult = cardSchema.safeParse(cardDetails);
             if (!cardResult.success) {
                 setPaymentError('Dados do cartão inválidos');
@@ -196,65 +180,64 @@ export default function CheckoutPage() {
     };
 
     const handleSubmit = async (): Promise<void> => {
+        // ✅ Se não autenticado, redireciona antes de qualquer validação
+        if (!isAuthenticated) {
+            toast.info('Faça login para finalizar seu pedido', { icon: '🔐' });
+            router.push('/sign-in?redirectTo=/checkout');
+            return;
+        }
+
         if (!validateForm()) return;
         if (!restaurant || !paymentMethod) return;
 
         setIsLoading(true);
 
         try {
-            if (isAuthenticated) {
-                // Save to Supabase
-                const orderItems: OrderItemData[] = items.map((item) => ({
-                    menuItemId: item.menuItem.id,
-                    menuItemName: item.menuItem.name,
-                    menuItemImage: item.menuItem.image || '/placeholder.png',
-                    menuItemPrice: item.menuItem.price,
-                    quantity: item.quantity,
-                    observation: item.observation,
-                }))
+            const orderItems: OrderItemData[] = items.map((item) => ({
+                menuItemId: item.menuItem.id,
+                menuItemName: item.menuItem.name,
+                menuItemImage: item.menuItem.image || '/placeholder.png',
+                menuItemPrice: item.menuItem.price,
+                quantity: item.quantity,
+                observation: item.observation,
+            }));
 
-                const result = await createOrderAction({
-                    restaurantId: restaurant.id,
-                    restaurantName: restaurant.name,
-                    items: orderItems,
-                    address: {
-                        street: addressData.street,
-                        number: addressData.number,
-                        complement: addressData.complement || undefined,
-                        neighborhood: addressData.neighborhood,
-                        city: addressData.city,
-                        state: addressData.state,
-                        zipCode: addressData.zipCode.replace(/\D/g, ''),
-                    },
-                    paymentMethod,
-                    changeFor: changeFor ? parseFloat(changeFor) : undefined,
-                    subtotal: totalPrice,
-                    deliveryFee: actualDeliveryFee,
-                    discount: couponDiscount,
-                    total: Math.max(0, finalTotal),
-                    couponCode: appliedCoupon?.code,
-                })
+            const result = await createOrderAction({
+                restaurantId: restaurant.id,
+                restaurantName: restaurant.name,
+                items: orderItems,
+                address: {
+                    street: addressData.street,
+                    number: addressData.number,
+                    complement: addressData.complement || undefined,
+                    neighborhood: addressData.neighborhood,
+                    city: addressData.city,
+                    state: addressData.state,
+                    zipCode: addressData.zipCode.replace(/\D/g, ''),
+                },
+                paymentMethod,
+                changeFor: changeFor ? parseFloat(changeFor) : undefined,
+                subtotal: totalPrice,
+                deliveryFee: actualDeliveryFee,
+                discount: couponDiscount,
+                total: Math.max(0, finalTotal),
+                couponCode: appliedCoupon?.code,
+            });
 
-                if (result.error) {
-                    toast.error(result.error)
-                    setIsLoading(false)
-                    return
-                }
-
-                clearCart()
-                router.push(`/order/${result.data!.id}`)
-            } else {
-                // Fallback: not authenticated — redirect to sign in
-                toast.info('Faça login para finalizar seu pedido', { icon: '🔐' })
-                router.push('/sign-in?redirectTo=/checkout')
+            if (result.error) {
+                toast.error(result.error);
+                setIsLoading(false);
+                return;
             }
+
+            clearCart();
+            router.push(`/order/${result.data!.id}`);
         } catch {
-            toast.error('Erro ao processar pedido. Tente novamente.')
-            setIsLoading(false)
+            toast.error('Erro ao processar pedido. Tente novamente.');
+            setIsLoading(false);
         }
     };
 
-    // Empty cart
     if (items.length === 0) {
         return (
             <div
@@ -334,11 +317,16 @@ export default function CheckoutPage() {
                                         </span>
                                         <p
                                             className="mt-0.5 text-xs"
-                                            style={{ color: 'var(--color-text-secondary)' }}
+                                            style={{
+                                                color: 'var(--color-text-secondary)',
+                                            }}
                                         >
                                             {address.street}, {address.number}
-                                            {address.complement ? ` - ${address.complement}` : ''}
-                                            {' • '}{address.neighborhood}
+                                            {address.complement
+                                                ? ` - ${address.complement}`
+                                                : ''}
+                                            {' • '}
+                                            {address.neighborhood}
                                         </p>
                                     </div>
 
@@ -346,7 +334,8 @@ export default function CheckoutPage() {
                                         <span
                                             className="rounded-full px-2 py-0.5 text-[10px] font-medium"
                                             style={{
-                                                backgroundColor: 'var(--color-primary-light)',
+                                                backgroundColor:
+                                                    'var(--color-primary-light)',
                                                 color: '#00A082',
                                             }}
                                         >
@@ -356,7 +345,6 @@ export default function CheckoutPage() {
                                 </button>
                             ))}
 
-                            {/* Use new address button */}
                             <button
                                 onClick={handleUseNewAddress}
                                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition-colors"
@@ -396,7 +384,9 @@ export default function CheckoutPage() {
                 )}
 
                 {/* Address Form */}
-                {(!isAuthenticated || savedAddresses.length === 0 || selectedAddressId === null) && (
+                {(!isAuthenticated ||
+                    savedAddresses.length === 0 ||
+                    selectedAddressId === null) && (
                     <AddressForm
                         data={addressData}
                         errors={addressErrors}
@@ -404,7 +394,6 @@ export default function CheckoutPage() {
                     />
                 )}
 
-                {/* Payment */}
                 <PaymentForm
                     selectedMethod={paymentMethod}
                     changeFor={changeFor}
@@ -414,7 +403,6 @@ export default function CheckoutPage() {
                     onChangeForChange={setChangeFor}
                 />
 
-                {/* Summary */}
                 <OrderSummary />
             </main>
 
@@ -437,6 +425,7 @@ export default function CheckoutPage() {
                     )}
                     <button
                         onClick={handleSubmit}
+                        // ✅ Só trava enquanto carrega — não trava por auth
                         disabled={isLoading || isCheckingAuth}
                         className="w-full py-4 rounded-full font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style={{
@@ -461,8 +450,7 @@ export default function CheckoutPage() {
                             <>
                                 {isAuthenticated
                                     ? CHECKOUT_MESSAGES.confirmButton
-                                    : 'Entrar e confirmar'
-                                }
+                                    : 'Entrar e confirmar'}
                                 {' • '}
                                 {formatPrice(Math.max(0, finalTotal))}
                             </>

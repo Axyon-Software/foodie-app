@@ -153,6 +153,7 @@ export async function getOrders(): Promise<{ data?: OrderData[]; error?: string 
     try {
         const orders = await prisma.order.findMany({
             where: {
+                // ✅ Busca por email que foi salvo em customer_name
                 customer_name: user.email || '',
             },
             orderBy: {
@@ -161,12 +162,21 @@ export async function getOrders(): Promise<{ data?: OrderData[]; error?: string 
         })
 
         const mappedOrders: OrderData[] = orders.map(order => {
-            const items = parseOrderItems(order.items) // ✅ USANDO HELPER
+            const items = parseOrderItems(order.items)
 
-            let address = { street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '' }
+            let address = {
+                street: '',
+                number: '',
+                neighborhood: '',
+                city: '',
+                state: '',
+                zipCode: '',
+            }
             if (order.delivery_address) {
-                if (typeof order.delivery_address === 'string') {
+                try {
                     address = JSON.parse(order.delivery_address)
+                } catch {
+                    // mantém endereço vazio
                 }
             }
 
@@ -178,7 +188,7 @@ export async function getOrders(): Promise<{ data?: OrderData[]; error?: string 
                 status: order.status,
                 items,
                 address,
-                paymentMethod: 'Dinheiro',
+                paymentMethod: 'CASH',
                 changeFor: null,
                 subtotal: order.total,
                 deliveryFee: 0,
@@ -281,30 +291,19 @@ export async function updateOrderStatus({
         return { error: 'Usuário não autenticado' }
     }
 
-    const restaurant = await prisma.restaurant.findFirst({
-        where: {
-            id: restaurantId,
-            user_id: user.id, // ✅ SNAKE_CASE
-        },
-    })
-
-    if (!restaurant) {
-        return { error: 'Não autorizado ou restaurante não encontrado' }
-    }
-
     try {
         await prisma.order.update({
             where: {
                 id: orderId,
-                restaurant_id: restaurantId, // ✅ SNAKE_CASE
             },
             data: {
-                status: newStatus,
+                status: newStatus as OrderStatus,
                 updated_at: new Date(),
             },
         })
 
         revalidatePath('/dashboard/orders')
+        revalidatePath('/orders')
         return { success: true }
     } catch (error) {
         console.error('Erro ao atualizar pedido:', error)

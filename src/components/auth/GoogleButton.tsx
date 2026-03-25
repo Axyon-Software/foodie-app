@@ -3,8 +3,9 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { signInWithGoogle } from '@/actions/auth'
+import { createClient } from '@/lib/supabase/client'
 import { AUTH_MESSAGES, getAuthErrorMessage } from '@/lib/constants/auth.constants'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 
 interface GoogleButtonProps {
     onError?: (error: string) => void
@@ -16,17 +17,29 @@ export function GoogleButton({ onError }: GoogleButtonProps) {
     const handleGoogleSignIn = async (): Promise<void> => {
         setIsLoading(true)
         try {
-            const response = await signInWithGoogle()
-            if (response?.error) {
-                const errorMessage = getAuthErrorMessage(response.error)
+            // ✅ OAuth pelo cliente — callback seta cookie e onAuthStateChange dispara
+            const supabase = createClient()
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                },
+            })
+
+            if (error) {
+                const errorMessage = getAuthErrorMessage(error.message)
                 toast.error(errorMessage)
-                onError?.(response.error)
+                onError?.(error.message)
+                setIsLoading(false)
             }
+            // ✅ Se não há erro, o browser será redirecionado para o Google
+            // Não precisamos fazer nada — o redirect acontece automaticamente
         } catch (error) {
+            if (isRedirectError(error)) throw error
+
             const errorMessage = AUTH_MESSAGES.GOOGLE_ERROR
             toast.error(errorMessage)
             onError?.(errorMessage)
-        } finally {
             setIsLoading(false)
         }
     }
@@ -47,8 +60,11 @@ export function GoogleButton({ onError }: GoogleButtonProps) {
         >
             {isLoading ? (
                 <div
-                    className="h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
-                    style={{ borderColor: 'var(--color-border)', borderTopColor: 'transparent' }}
+                    className="h-5 w-5 animate-spin rounded-full border-2"
+                    style={{
+                        borderColor: 'var(--color-border)',
+                        borderTopColor: 'transparent',
+                    }}
                 />
             ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24">
@@ -70,10 +86,9 @@ export function GoogleButton({ onError }: GoogleButtonProps) {
                     />
                 </svg>
             )}
-
             <span>
-        {isLoading ? AUTH_MESSAGES.GOOGLE_LOADING : AUTH_MESSAGES.GOOGLE_BUTTON}
-      </span>
+                {isLoading ? AUTH_MESSAGES.GOOGLE_LOADING : AUTH_MESSAGES.GOOGLE_BUTTON}
+            </span>
         </button>
     )
 }

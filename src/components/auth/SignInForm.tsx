@@ -1,12 +1,12 @@
 // src/components/auth/SignInForm.tsx
 'use client'
 
-import { useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { UtensilsCrossed } from 'lucide-react'
-import { signInWithEmail } from '@/actions/auth'
+import { createClient } from '@/lib/supabase/client'
 import { signInSchema } from '@/lib/validations/auth.validations'
 import { AUTH_MESSAGES, getAuthErrorMessage } from '@/lib/constants/auth.constants'
 import { AuthInput } from '@/components/auth/AuthInput'
@@ -14,6 +14,7 @@ import { GoogleButton } from '@/components/auth/GoogleButton'
 import { AuthDivider } from '@/components/auth/AuthDivider'
 
 export function SignInForm() {
+    const router = useRouter()
     const searchParams = useSearchParams()
     const redirectTo = searchParams.get('redirectTo') || '/'
 
@@ -21,7 +22,7 @@ export function SignInForm() {
     const [password, setPassword] = useState<string>('')
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [serverError, setServerError] = useState<string>('')
-    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [isPending, startTransition] = useTransition()
 
     const handleSubmit = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault()
@@ -40,26 +41,22 @@ export function SignInForm() {
             return
         }
 
-        setIsLoading(true)
-        try {
-            const response = await signInWithEmail({ email, password })
-            
-            // Se não houve resposta (redirect aconteceu), não fazer nada
-            if (!response) {
+        startTransition(async () => {
+            const supabase = createClient()
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            })
+
+            if (error) {
+                setServerError(getAuthErrorMessage(error.message))
                 return
             }
-            
-            if (response.error) {
-                const message = getAuthErrorMessage(response.error)
-                setServerError(message)
-                console.log('Login error:', response.error)
-            }
-        } catch (error) {
-            console.error('Login catch error:', error)
-            setServerError('Ocorreu um erro inesperado. Tente novamente.')
-        } finally {
-            setIsLoading(false)
-        }
+
+            // ✅ Usar window.location para garantir reload completo
+            // e o AuthContext reler o cookie corretamente
+            window.location.href = redirectTo
+        })
     }
 
     return (
@@ -99,7 +96,6 @@ export function SignInForm() {
                 {/* Google OAuth */}
                 <GoogleButton />
 
-                {/* Divider */}
                 <div className="my-6">
                     <AuthDivider />
                 </div>
@@ -146,7 +142,6 @@ export function SignInForm() {
                         autoComplete="current-password"
                     />
 
-                    {/* Forgot password */}
                     <div className="flex justify-end">
                         <Link
                             href="/forgot-password"
@@ -157,17 +152,17 @@ export function SignInForm() {
                         </Link>
                     </div>
 
-                    {/* Submit */}
                     <button
                         type="submit"
-                        disabled={isLoading}
+                        disabled={isPending}
                         className="mt-2 w-full rounded-xl bg-[#00A082] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#008F74] disabled:opacity-60"
                     >
-                        {isLoading ? AUTH_MESSAGES.SIGN_IN_LOADING : AUTH_MESSAGES.SIGN_IN_BUTTON}
+                        {isPending
+                            ? AUTH_MESSAGES.SIGN_IN_LOADING
+                            : AUTH_MESSAGES.SIGN_IN_BUTTON}
                     </button>
                 </form>
 
-                {/* Sign up link */}
                 <p
                     className="mt-6 text-center text-sm"
                     style={{ color: 'var(--color-text-secondary)' }}

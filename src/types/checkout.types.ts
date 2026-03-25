@@ -7,7 +7,7 @@ export interface CheckoutState {
     changeFor?: number;
 }
 
-export interface OrderData {
+export interface CheckoutOrderData {
     id: string;
     items: CartItem[];
     address: Address;
@@ -23,3 +23,6 @@ export interface OrderData {
     createdAt: string;
     estimatedDelivery: string;
 }
+
+/** @deprecated Use CheckoutOrderData instead */
+export type OrderData = CheckoutOrderData;

@@ -1,10 +1,10 @@
 // src/components/orders/OrdersList.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { Loader2, ShoppingBag, ClipboardList } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Loader2, ShoppingBag, ClipboardList, Search, X, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { getOrders, type OrderData } from '@/actions/orders'
 import {
@@ -21,6 +21,8 @@ export function OrdersList() {
     const [orders, setOrders] = useState<OrderData[]>([])
     const [isLoading, setIsLoading] = useState<boolean>(true)
     const [activeTab, setActiveTab] = useState<TabType>('active')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [showSearch, setShowSearch] = useState(false)
 
     useEffect(() => {
         const loadOrders = async (): Promise<void> => {
@@ -35,7 +37,6 @@ export function OrdersList() {
             setOrders(result.data || [])
             setIsLoading(false)
 
-            // Auto-select tab based on orders
             const hasActive = (result.data || []).some((o) =>
                 ACTIVE_STATUSES.includes(o.status)
             )
@@ -49,24 +50,32 @@ export function OrdersList() {
 
     const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status))
     const completedOrders = orders.filter((o) => COMPLETED_STATUSES.includes(o.status))
-    const displayedOrders = activeTab === 'active' ? activeOrders : completedOrders
+
+    const filteredOrders = useMemo(() => {
+        const baseOrders = activeTab === 'active' ? activeOrders : completedOrders
+
+        if (!searchQuery.trim()) return baseOrders
+
+        const query = searchQuery.toLowerCase()
+        return baseOrders.filter(
+            (o) =>
+                o.id.toLowerCase().includes(query) ||
+                o.restaurantName.toLowerCase().includes(query) ||
+                o.items.some((i) => i.menuItemName.toLowerCase().includes(query))
+        )
+    }, [activeTab, activeOrders, completedOrders, searchQuery])
 
     const handleExplore = (): void => {
         router.push('/')
     }
 
-    // Loading
     if (isLoading) {
         return (
             <div
                 className="flex min-h-[60vh] items-center justify-center"
                 style={{ backgroundColor: 'var(--color-bg)' }}
             >
-                <Loader2
-                    size={32}
-                    className="animate-spin"
-                    style={{ color: '#00A082' }}
-                />
+                <Loader2 size={32} className="animate-spin" style={{ color: '#00A082' }} />
             </div>
         )
     }
@@ -81,21 +90,77 @@ export function OrdersList() {
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mb-6"
+                    className="mb-6 flex items-start justify-between"
                 >
-                    <h1
-                        className="text-2xl font-bold"
-                        style={{ color: 'var(--color-text)' }}
-                    >
-                        {ORDER_MESSAGES.PAGE_TITLE}
-                    </h1>
-                    <p
-                        className="mt-1 text-sm"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                    >
-                        {ORDER_MESSAGES.PAGE_SUBTITLE}
-                    </p>
+                    <div>
+                        <h1
+                            className="text-2xl font-bold"
+                            style={{ color: 'var(--color-text)' }}
+                        >
+                            {ORDER_MESSAGES.PAGE_TITLE}
+                        </h1>
+                        <p
+                            className="mt-1 text-sm"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                            {ORDER_MESSAGES.PAGE_SUBTITLE}
+                        </p>
+                    </div>
+
+                    {orders.length > 0 && (
+                        <button
+                            onClick={() => setShowSearch(!showSearch)}
+                            className="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                            style={{
+                                backgroundColor: showSearch
+                                    ? '#00A082'
+                                    : 'var(--color-bg-secondary)',
+                                color: showSearch ? 'white' : 'var(--color-text-secondary)',
+                            }}
+                        >
+                            {showSearch ? <X size={18} /> : <Search size={18} />}
+                        </button>
+                    )}
                 </motion.div>
+
+                {/* Search Bar */}
+                <AnimatePresence>
+                    {showSearch && orders.length > 0 && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="mb-4 overflow-hidden"
+                        >
+                            <div
+                                className="flex items-center gap-3 rounded-xl px-4 py-3"
+                                style={{ backgroundColor: 'var(--color-bg-card)' }}
+                            >
+                                <Search
+                                    size={18}
+                                    style={{ color: 'var(--color-text-tertiary)' }}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder={ORDER_MESSAGES.SEARCH_PLACEHOLDER}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="flex-1 bg-transparent text-sm outline-none"
+                                    style={{ color: 'var(--color-text)' }}
+                                    autoFocus
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery('')}>
+                                        <X
+                                            size={16}
+                                            style={{ color: 'var(--color-text-tertiary)' }}
+                                        />
+                                    </button>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {orders.length > 0 ? (
                     <>
@@ -128,9 +193,7 @@ export function OrdersList() {
                                 <ClipboardList size={16} />
                                 {ORDER_MESSAGES.TAB_ACTIVE}
                                 {activeOrders.length > 0 && (
-                                    <span
-                                        className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#00A082] px-1.5 text-[10px] font-bold text-white"
-                                    >
+                                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#00A082] px-1.5 text-[10px] font-bold text-white">
                                         {activeOrders.length}
                                     </span>
                                 )}
@@ -168,9 +231,9 @@ export function OrdersList() {
                         </motion.div>
 
                         {/* Orders List */}
-                        {displayedOrders.length > 0 ? (
+                        {filteredOrders.length > 0 ? (
                             <div className="flex flex-col gap-4">
-                                {displayedOrders.map((order, index) => (
+                                {filteredOrders.map((order, index) => (
                                     <OrderCard
                                         key={order.id}
                                         order={order}
@@ -188,9 +251,11 @@ export function OrdersList() {
                                     className="text-sm"
                                     style={{ color: 'var(--color-text-secondary)' }}
                                 >
-                                    {activeTab === 'active'
-                                        ? 'Nenhum pedido em andamento'
-                                        : 'Nenhum pedido concluído'}
+                                    {searchQuery
+                                        ? 'Nenhum pedido encontrado para sua busca'
+                                        : activeTab === 'active'
+                                            ? 'Nenhum pedido em andamento'
+                                            : 'Nenhum pedido concluído'}
                                 </p>
                             </motion.div>
                         )}

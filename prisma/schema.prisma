@@ -175,6 +175,7 @@ model Product {
 
 model Order {
   id               String      @id @default(uuid())
+  customer_id      String?
   customer_name    String
   customer_phone   String?
   order_type       String      @default("DINE_IN")
@@ -187,11 +188,23 @@ model Order {
   updated_at       DateTime    @updatedAt
   restaurant_id    String
 
+  // Cancelamento
+  cancelled_at     DateTime?
+  cancel_reason    String?
+
+  // Prazos de preparo
+  estimated_preparation_time Int?       // em minutos
+  preparation_started_at     DateTime?
+  ready_at                   DateTime?
+  delivered_at               DateTime?
+
   restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  reviews    Review[]
 
   @@index([restaurant_id])
   @@index([status])
   @@index([created_at])
+  @@index([customer_id])
   @@map("orders")
 }
 
@@ -261,11 +274,17 @@ model Review {
   id            String    @id @default(uuid())
   restaurant_id String
   user_id       String
+  order_id      String?
   rating        Int
   comment       String?
   response      String?
   responded_at  DateTime?
   created_at    DateTime  @default(now())
 
+  order Order? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@index([restaurant_id])
+  @@index([order_id])
+  @@index([user_id])
   @@map("reviews")
 }

@@ -1,90 +1,40 @@
 // src/components/layout/Header.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { ShoppingBag, MapPin, User, ArrowLeft } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/hooks/useCart'
+import { useAuth } from '@/hooks/useAuth'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import { UserMenu } from '@/components/layout/UserMenu'
-import { createClient } from '@/lib/supabase/client'
-
-interface UserData {
-    id: string;
-    email: string;
-    fullName: string;
-    avatarUrl?: string;
-}
 
 export default function Header() {
     const router = useRouter()
     const pathname = usePathname()
     const { items, totalItems, setIsCartOpen } = useCart()
-    const [user, setUser] = useState<UserData | null>(null)
-    const [isLoading, setIsLoading] = useState<boolean>(true)
-    const [mounted, setMounted] = useState<boolean>(false)
 
-    // Page detection - use useMemo to avoid recalculation
+    // ✅ Usa o AuthContext — fonte única da verdade
+    const { user, isLoading, isAuthenticated } = useAuth()
+
     const isHomePage = useMemo(() => pathname === '/', [pathname])
-    const isAuthPage = useMemo(() => pathname.startsWith('/sign') || pathname.startsWith('/forgot') || pathname.startsWith('/reset'), [pathname])
-    const isSubPage = useMemo(() => !isHomePage && !isAuthPage, [isHomePage, isAuthPage])
+    const isAuthPage = useMemo(
+        () =>
+            pathname.startsWith('/sign') ||
+            pathname.startsWith('/forgot') ||
+            pathname.startsWith('/reset'),
+        [pathname]
+    )
+    const isSubPage = useMemo(
+        () => !isHomePage && !isAuthPage,
+        [isHomePage, isAuthPage]
+    )
 
-    // Prevent hydration mismatch
-    useEffect(() => {
-        setMounted(true)
-    }, [])
+    if (isAuthPage) return null
 
-    // Fetch user session
-    useEffect(() => {
-        if (!mounted) return
-
-        const supabase = createClient()
-
-        const fetchUser = async (): Promise<void> => {
-            const { data: { user: authUser } } = await supabase.auth.getUser()
-
-            if (authUser) {
-                setUser({
-                    id: authUser.id,
-                    email: authUser.email || '',
-                    fullName: authUser.user_metadata?.full_name || '',
-                    avatarUrl: authUser.user_metadata?.avatar_url || '',
-                })
-            } else {
-                setUser(null)
-            }
-            setIsLoading(false)
-        }
-
-        fetchUser()
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, session) => {
-                if (session?.user) {
-                    setUser({
-                        id: session.user.id,
-                        email: session.user.email || '',
-                        fullName: session.user.user_metadata?.full_name || '',
-                        avatarUrl: session.user.user_metadata?.avatar_url || '',
-                    })
-                } else {
-                    setUser(null)
-                }
-            }
-        )
-
-        return () => subscription.unsubscribe()
-    }, [mounted])
-
-    // Don't show header on auth pages - but wait for mount
-    if (!mounted || isAuthPage) return null
-
-    const handleGoBack = (): void => {
-        router.back()
-    }
+    const handleGoBack = (): void => router.back()
 
     const handleCartClick = (): void => {
         if (items.length > 0) {
@@ -94,9 +44,7 @@ export default function Header() {
         }
     }
 
-    const handleSignIn = (): void => {
-        router.push('/sign-in')
-    }
+    const handleSignIn = (): void => router.push('/sign-in')
 
     return (
         <header
@@ -117,11 +65,13 @@ export default function Header() {
                                 style={{ backgroundColor: 'var(--color-bg-secondary)' }}
                                 aria-label="Voltar"
                             >
-                                <ArrowLeft size={20} style={{ color: 'var(--color-text)' }} />
+                                <ArrowLeft
+                                    size={20}
+                                    style={{ color: 'var(--color-text)' }}
+                                />
                             </button>
                         )}
 
-                        {/* Logo */}
                         <Link href="/" className="flex items-center gap-2">
                             <span className="text-2xl font-bold text-[#00A082]">
                                 🍽️ Foodie
@@ -155,7 +105,6 @@ export default function Header() {
 
                     {/* Right Section */}
                     <div className="flex items-center gap-2">
-                        {/* Theme Toggle */}
                         <ThemeToggle />
 
                         {/* Cart Button */}
@@ -163,12 +112,14 @@ export default function Header() {
                             onClick={handleCartClick}
                             className="relative rounded-full p-3 transition-colors hover:opacity-80"
                             style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-                            aria-label={mounted ? `Carrinho com ${totalItems} itens` : 'Carrinho'}
+                            aria-label={`Carrinho com ${totalItems} itens`}
                         >
-                            <ShoppingBag size={24} style={{ color: 'var(--color-text)' }} />
-
+                            <ShoppingBag
+                                size={24}
+                                style={{ color: 'var(--color-text)' }}
+                            />
                             <AnimatePresence>
-                                {mounted && totalItems > 0 && (
+                                {totalItems > 0 && (
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
@@ -181,12 +132,12 @@ export default function Header() {
                             </AnimatePresence>
                         </button>
 
-                        {/* User Section */}
+                        {/* User Section — ✅ via AuthContext */}
                         {!isLoading && (
                             <>
-                                {user ? (
+                                {isAuthenticated && user ? (
                                     <UserMenu
-                                        userName={user.fullName}
+                                        userName={user.fullName || ''}
                                         userEmail={user.email}
                                         userAvatar={user.avatarUrl}
                                     />
@@ -195,7 +146,8 @@ export default function Header() {
                                         onClick={handleSignIn}
                                         className="flex items-center gap-2 rounded-full px-3 py-3 transition-colors hover:opacity-80 md:px-4"
                                         style={{
-                                            backgroundColor: 'var(--color-bg-secondary)',
+                                            backgroundColor:
+                                                'var(--color-bg-secondary)',
                                             color: 'var(--color-text)',
                                         }}
                                         aria-label="Fazer login"

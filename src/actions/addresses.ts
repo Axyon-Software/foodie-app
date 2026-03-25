@@ -76,8 +76,11 @@ export async function createAddress(formData: {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+        console.error('[createAddress] Erro de autenticação:', authError?.message)
         return { error: 'Usuário não autenticado' }
     }
+
+    console.log('[createAddress] Usuário autenticado:', user.id, user.email)
 
     // If setting as default, unset other defaults first
     if (formData.isDefault) {
@@ -88,33 +91,47 @@ export async function createAddress(formData: {
     }
 
     // Check if this is the first address (auto-set as default)
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
         .from('addresses')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
 
+    console.log('[createAddress] Contagem de endereços:', count, 'Erro:', countError?.message)
+
     const isFirstAddress = (count || 0) === 0
+
+    const insertData = {
+        user_id: user.id,
+        label: formData.label,
+        street: formData.street,
+        number: formData.number,
+        complement: formData.complement || '',
+        neighborhood: formData.neighborhood,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zipCode,
+        is_default: formData.isDefault || isFirstAddress,
+    }
+
+    console.log('[createAddress] Tentando inserir:', JSON.stringify(insertData))
 
     const { data, error } = await supabase
         .from('addresses')
-        .insert({
-            user_id: user.id,
-            label: formData.label,
-            street: formData.street,
-            number: formData.number,
-            complement: formData.complement || '',
-            neighborhood: formData.neighborhood,
-            city: formData.city,
-            state: formData.state,
-            zip_code: formData.zipCode,
-            is_default: formData.isDefault || isFirstAddress,
-        })
+        .insert(insertData)
         .select()
         .single()
 
     if (error) {
+        console.error('[createAddress] Erro detalhado:', JSON.stringify({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+        }))
         return { error: 'Erro ao salvar endereço' }
     }
+
+    console.log('[createAddress] Endereço salvo com sucesso:', data.id)
 
     return {
         data: {

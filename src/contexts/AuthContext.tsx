@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.tsx
 'use client'
 
 import {
@@ -9,6 +10,11 @@ import {
 } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { AuthState, UserProfile, UserRole } from '@/types/auth.types'
+import type { User } from '@supabase/supabase-js'
+import {
+    signUpWithEmail as serverSignUp,
+    resetPassword as serverResetPassword,
+} from '@/actions/auth'
 
 interface AuthContextType extends AuthState {
     signIn: (email: string, password: string) => Promise<{ error?: string }>
@@ -18,7 +24,9 @@ interface AuthContextType extends AuthState {
         fullName: string
     ) => Promise<{ error?: string; success?: boolean }>
     signOut: () => Promise<void>
-    resetPassword: (email: string) => Promise<{ error?: string; success?: boolean }>
+    resetPassword: (
+        email: string
+    ) => Promise<{ error?: string; success?: boolean }>
     updateProfile: (data: Partial<UserProfile>) => Promise<{ error?: string }>
     hasRole: (roles: UserRole | UserRole[]) => boolean
     refreshUser: () => Promise<void>
@@ -26,26 +34,55 @@ interface AuthContextType extends AuthState {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-async function fetchUserProfile(supabase: ReturnType<typeof createClient>, userId: string): Promise<UserProfile | null> {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-    if (error || !data) {
-        return null
-    }
-
+function buildProfileFromUser(user: User): UserProfile {
     return {
-        id: data.id,
-        email: data.email || '',
-        fullName: data.full_name,
-        role: data.role || 'CLIENTE',
-        avatarUrl: data.avatar_url,
-        phone: data.phone,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
+        id: user.id,
+        email: user.email || '',
+        fullName:
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split('@')[0] ||
+            '',
+        role: 'CLIENTE',
+        avatarUrl: user.user_metadata?.avatar_url || undefined,
+        phone: undefined,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at || user.created_at,
+    }
+}
+
+async function fetchUserProfile(
+    supabase: ReturnType<typeof createClient>,
+    user: User
+): Promise<UserProfile> {
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+
+        if (error || !data) {
+            return buildProfileFromUser(user)
+        }
+
+        return {
+            id: data.id,
+            email: data.email || user.email || '',
+            fullName:
+                data.full_name ||
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                '',
+            role: data.role || 'CLIENTE',
+            avatarUrl: data.avatar_url || user.user_metadata?.avatar_url,
+            phone: data.phone,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+        }
+    } catch {
+        // ✅ Qualquer erro — usa dados básicos do usuário
+        return buildProfileFromUser(user)
     }
 }
 
@@ -59,17 +96,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const refreshUser = useCallback(async () => {
         const supabase = createClient()
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser()
 
         if (user) {
-            const profile = await fetchUserProfile(supabase, user.id)
+            // ✅ Seta autenticado imediatamente com dados básicos
+            // sem esperar o perfil do banco
+            const basicProfile = buildProfileFromUser(user)
             setState({
                 user,
-                profile,
+                profile: basicProfile,
                 isLoading: false,
                 isAuthenticated: true,
+            })
+
+            // ✅ Depois busca o perfil completo em background
+            fetchUserProfile(supabase, user).then((profile) => {
+                setState({
+                    user,
+                    profile,
+                    isLoading: false,
+                    isAuthenticated: true,
+                })
             })
         } else {
             setState({
@@ -82,29 +129,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [])
 
     useEffect(() => {
+        const supabase = createClient()
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (event, session) => {
+                if (session?.user) {
+                    // ✅ Seta autenticado imediatamente com dados básicos
+                    const basicProfile = buildProfileFromUser(session.user)
+                    setState({
+                        user: session.user,
+                        profile: basicProfile,
+                        isLoading: false,
+                        isAuthenticated: true,
+                    })
+
+                    // ✅ setTimeout quebra o deadlock do onAuthStateChange
+                    // Busca o perfil completo fora do ciclo do evento
+                    setTimeout(() => {
+                        fetchUserProfile(supabase, session.user!).then((profile) => {
+                            setState({
+                                user: session.user!,
+                                profile,
+                                isLoading: false,
+                                isAuthenticated: true,
+                            })
+                        })
+                    }, 0)
+                } else {
+                    setState({
+                        user: null,
+                        profile: null,
+                        isLoading: false,
+                        isAuthenticated: false,
+                    })
+                }
+            }
+        )
+
         refreshUser()
 
-        const supabase = createClient()
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (session?.user) {
-                const profile = await fetchUserProfile(supabase, session.user.id)
-                setState({
-                    user: session.user,
-                    profile,
-                    isLoading: false,
-                    isAuthenticated: true,
-                })
-            } else {
-                setState({
-                    user: null,
-                    profile: null,
-                    isLoading: false,
-                    isAuthenticated: false,
-                })
+        // ✅ Detecta retorno do OAuth
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search)
+            if (params.get('auth') === 'success') {
+                refreshUser()
+                const url = new URL(window.location.href)
+                url.searchParams.delete('auth')
+                window.history.replaceState({}, '', url.toString())
             }
-        })
+        }
 
         return () => {
             subscription.unsubscribe()
@@ -117,11 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email,
             password,
         })
-
-        if (error) {
-            return { error: error.message }
-        }
-
+        if (error) return { error: error.message }
         return {}
     }
 
@@ -130,52 +199,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: string,
         fullName: string
     ) => {
-        const supabase = createClient()
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: fullName,
-                },
-            },
-        })
-
-        if (error) {
-            return { error: error.message }
-        }
-
-        return { success: true }
+        return (await serverSignUp({ email, password, fullName })) ?? {}
     }
 
     const signOut = async () => {
         const supabase = createClient()
         await supabase.auth.signOut()
-        setState({
-            user: null,
-            profile: null,
-            isLoading: false,
-            isAuthenticated: false,
-        })
     }
 
     const resetPassword = async (email: string) => {
-        const supabase = createClient()
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/reset-password`,
-        })
-
-        if (error) {
-            return { error: error.message }
-        }
-
-        return { success: true }
+        return (await serverResetPassword(email)) ?? {}
     }
 
     const updateProfile = async (data: Partial<UserProfile>) => {
-        if (!state.user) {
-            return { error: 'Usuário não autenticado' }
-        }
+        if (!state.user) return { error: 'Usuário não autenticado' }
 
         const supabase = createClient()
         const { error } = await supabase
@@ -189,9 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             })
             .eq('id', state.user.id)
 
-        if (error) {
-            return { error: error.message }
-        }
+        if (error) return { error: error.message }
 
         await refreshUser()
         return {}
@@ -199,7 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const hasRole = (roles: UserRole | UserRole[]): boolean => {
         if (!state.profile) return false
-
         const roleArray = Array.isArray(roles) ? roles : [roles]
         return roleArray.includes(state.profile.role)
     }

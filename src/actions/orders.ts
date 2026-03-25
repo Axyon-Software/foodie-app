@@ -443,6 +443,7 @@ export async function cancelOrderByRestaurant({
         })
 
         revalidatePath('/dashboard/orders')
+        revalidatePath('/orders')
         return { success: true }
     } catch (error) {
         console.error('Erro ao cancelar pedido:', error)

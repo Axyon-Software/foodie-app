@@ -1,8 +1,8 @@
 ---
-name: Bug report
+name: "\U0001F41B Bug Report"
 about: Reportar um problema
 title: "[BUG]"
-labels: bug, feature
+labels: bug
 assignees: ''
 
 ---
